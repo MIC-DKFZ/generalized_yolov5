@@ -30,10 +30,11 @@ from utils.augmentations import Albumentations, augment_hsv, copy_paste, letterb
 from utils.general import (LOGGER, check_dataset, check_requirements, check_yaml, clean_str, segments2boxes, xyn2xy,
                            xywh2xyxy, xywhn2xyxy, xyxy2xywhn)
 from utils.torch_utils import torch_distributed_zero_first
+from medpy.io import load
 
 # Parameters
 HELP_URL = 'https://github.com/ultralytics/yolov5/wiki/Train-Custom-Data'
-IMG_FORMATS = ['bmp', 'jpg', 'jpeg', 'png', 'tif', 'tiff', 'dng', 'webp', 'mpo']  # acceptable image suffixes
+IMG_FORMATS = ['mha']  # acceptable image suffixes
 VID_FORMATS = ['mov', 'avi', 'mp4', 'mpg', 'mpeg', 'm4v', 'wmv', 'mkv']  # acceptable video suffixes
 NUM_THREADS = min(8, os.cpu_count())  # number of multiprocessing threads
 
@@ -656,6 +657,26 @@ class LoadImagesAndLabels(Dataset):
 
 
 # Ancillary functions --------------------------------------------------------------------------------------------------
+# def load_image(self, i):
+#     # loads 1 image from dataset index 'i', returns im, original hw, resized hw
+#     im = self.imgs[i]
+#     if im is None:  # not cached in ram
+#         npy = self.img_npy[i]
+#         if npy and npy.exists():  # load npy
+#             im = np.load(npy)
+#         else:  # read image
+#             path = self.img_files[i]
+#             im = cv2.imread(path)  # BGR
+#             assert im is not None, f'Image Not Found {path}'
+#         h0, w0 = im.shape[:2]  # orig hw
+#         r = self.img_size / max(h0, w0)  # ratio
+#         if r != 1:  # if sizes are not equal
+#             im = cv2.resize(im, (int(w0 * r), int(h0 * r)),
+#                             interpolation=cv2.INTER_AREA if r < 1 and not self.augment else cv2.INTER_LINEAR)
+#         return im, (h0, w0), im.shape[:2]  # im, hw_original, hw_resized
+#     else:
+#         return self.imgs[i], self.img_hw0[i], self.img_hw[i]  # im, hw_original, hw_resized
+
 def load_image(self, i):
     # loads 1 image from dataset index 'i', returns im, original hw, resized hw
     im = self.imgs[i]
@@ -665,7 +686,8 @@ def load_image(self, i):
             im = np.load(npy)
         else:  # read image
             path = self.img_files[i]
-            im = cv2.imread(path)  # BGR
+            # im = cv2.imread(path)  # BGR
+            im, im_header = load(path)
             assert im is not None, f'Image Not Found {path}'
         h0, w0 = im.shape[:2]  # orig hw
         r = self.img_size / max(h0, w0)  # ratio
