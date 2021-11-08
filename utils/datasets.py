@@ -22,7 +22,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 import yaml
-from PIL import ExifTags, Image, ImageOps
+# from PIL import ExifTags, Image, ImageOps
 from torch.utils.data import Dataset
 from tqdm import tqdm
 
@@ -30,7 +30,7 @@ from utils.augmentations import Albumentations, augment_hsv, copy_paste, letterb
 from utils.general import (LOGGER, check_dataset, check_requirements, check_yaml, clean_str, segments2boxes, xyn2xy,
                            xywh2xyxy, xywhn2xyxy, xyxy2xywhn)
 from utils.torch_utils import torch_distributed_zero_first
-from medpy.io import load
+from medpy.io import load, save
 
 # Parameters
 HELP_URL = 'https://github.com/ultralytics/yolov5/wiki/Train-Custom-Data'
@@ -39,9 +39,9 @@ VID_FORMATS = ['mov', 'avi', 'mp4', 'mpg', 'mpeg', 'm4v', 'wmv', 'mkv']  # accep
 NUM_THREADS = min(8, os.cpu_count())  # number of multiprocessing threads
 
 # Get orientation exif tag
-for orientation in ExifTags.TAGS.keys():
-    if ExifTags.TAGS[orientation] == 'Orientation':
-        break
+# for orientation in ExifTags.TAGS.keys():
+#     if ExifTags.TAGS[orientation] == 'Orientation':
+#         break
 
 
 def get_hash(paths):
@@ -52,20 +52,45 @@ def get_hash(paths):
     return h.hexdigest()  # return hash
 
 
-def exif_size(img):
-    # Returns exif-corrected PIL size
-    s = img.size  # (width, height)
-    try:
-        rotation = dict(img._getexif().items())[orientation]
-        if rotation == 6:  # rotation 270
-            s = (s[1], s[0])
-        elif rotation == 8:  # rotation 90
-            s = (s[1], s[0])
-    except:
-        pass
+# def exif_size(img):
+#     # Returns exif-corrected PIL size
+#     s = img.size  # (width, height)
+#     try:
+#         rotation = dict(img._getexif().items())[orientation]
+#         if rotation == 6:  # rotation 270
+#             s = (s[1], s[0])
+#         elif rotation == 8:  # rotation 90
+#             s = (s[1], s[0])
+#     except:
+#         pass
+#
+#     return s
 
-    return s
 
+# def exif_transpose(image):
+#     """
+#     Transpose a PIL image accordingly if it has an EXIF Orientation tag.
+#     Inplace version of https://github.com/python-pillow/Pillow/blob/master/src/PIL/ImageOps.py exif_transpose()
+#
+#     :param image: The image to transpose.
+#     :return: An image.
+#     """
+#     exif = image.getexif()
+#     orientation = exif.get(0x0112, 1)  # default 1
+#     if orientation > 1:
+#         method = {2: Image.FLIP_LEFT_RIGHT,
+#                   3: Image.ROTATE_180,
+#                   4: Image.FLIP_TOP_BOTTOM,
+#                   5: Image.TRANSPOSE,
+#                   6: Image.ROTATE_270,
+#                   7: Image.TRANSVERSE,
+#                   8: Image.ROTATE_90,
+#                   }.get(orientation)
+#         if method is not None:
+#             image = image.transpose(method)
+#             del exif[0x0112]
+#             image.info["exif"] = exif.tobytes()
+#     return image
 
 def exif_transpose(image):
     """
@@ -75,21 +100,6 @@ def exif_transpose(image):
     :param image: The image to transpose.
     :return: An image.
     """
-    exif = image.getexif()
-    orientation = exif.get(0x0112, 1)  # default 1
-    if orientation > 1:
-        method = {2: Image.FLIP_LEFT_RIGHT,
-                  3: Image.ROTATE_180,
-                  4: Image.FLIP_TOP_BOTTOM,
-                  5: Image.TRANSPOSE,
-                  6: Image.ROTATE_270,
-                  7: Image.TRANSVERSE,
-                  8: Image.ROTATE_90,
-                  }.get(orientation)
-        if method is not None:
-            image = image.transpose(method)
-            del exif[0x0112]
-            image.info["exif"] = exif.tobytes()
     return image
 
 
@@ -688,6 +698,8 @@ def load_image(self, i):
             path = self.img_files[i]
             # im = cv2.imread(path)  # BGR
             im, im_header = load(path)
+            # im = im[..., np.newaxis]
+            im = np.stack((im,) * 3, axis=-1)
             assert im is not None, f'Image Not Found {path}'
         h0, w0 = im.shape[:2]  # orig hw
         r = self.img_size / max(h0, w0)  # ratio
@@ -909,17 +921,21 @@ def verify_image_label(args):
     nm, nf, ne, nc, msg, segments = 0, 0, 0, 0, '', []  # number (missing, found, empty, corrupt), message, segments
     try:
         # verify images
-        im = Image.open(im_file)
-        im.verify()  # PIL verify
-        shape = exif_size(im)  # image size
+        # im = Image.open(im_file)
+        # im.verify()  # PIL verify
+        im, im_header = load(im_file)
+        # im = im[..., np.newaxis]
+        im = np.stack((im,) * 3, axis=-1)
+        # shape = exif_size(im)  # image size
+        shape = im.shape
         assert (shape[0] > 9) & (shape[1] > 9), f'image size {shape} <10 pixels'
-        assert im.format.lower() in IMG_FORMATS, f'invalid image format {im.format}'
-        if im.format.lower() in ('jpg', 'jpeg'):
-            with open(im_file, 'rb') as f:
-                f.seek(-2, 2)
-                if f.read() != b'\xff\xd9':  # corrupt JPEG
-                    ImageOps.exif_transpose(Image.open(im_file)).save(im_file, 'JPEG', subsampling=0, quality=100)
-                    msg = f'{prefix}WARNING: {im_file}: corrupt JPEG restored and saved'
+        # assert im.format.lower() in IMG_FORMATS, f'invalid image format {im.format}'
+        # if im.format.lower() in ('jpg', 'jpeg'):
+        #     with open(im_file, 'rb') as f:
+        #         f.seek(-2, 2)
+        #         if f.read() != b'\xff\xd9':  # corrupt JPEG
+        #             ImageOps.exif_transpose(Image.open(im_file)).save(im_file, 'JPEG', subsampling=0, quality=100)
+        #             msg = f'{prefix}WARNING: {im_file}: corrupt JPEG restored and saved'
 
         # verify labels
         if os.path.isfile(lb_file):
@@ -982,11 +998,15 @@ def dataset_stats(path='coco128.yaml', autodownload=False, verbose=False, profil
         # HUB ops for 1 image 'f': resize and save at reduced quality in /dataset-hub for web/app viewing
         f_new = im_dir / Path(f).name  # dataset-hub image filename
         try:  # use PIL
-            im = Image.open(f)
+            # im = Image.open(f)
+            im, im_header = load(f)
+            # im = im[..., np.newaxis]
+            im = np.stack((im,) * 3, axis=-1)
             r = max_dim / max(im.height, im.width)  # ratio
             if r < 1.0:  # image too large
                 im = im.resize((int(im.width * r), int(im.height * r)))
-            im.save(f_new, quality=75)  # save
+            # im.save(f_new, quality=75)  # save
+            save(f_new, use_compression=True)
         except Exception as e:  # use OpenCV
             print(f'WARNING: HUB ops PIL failure {f}: {e}')
             im = cv2.imread(f)
