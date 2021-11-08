@@ -434,6 +434,12 @@ class LoadImagesAndLabels(Dataset):
 
         # Display cache
         nf, nm, ne, nc, n = cache.pop('results')  # found, missing, empty, corrupted, total
+
+        # Fix from Karol: Remove channel dim from shape entry stored in every tuple
+        for key in cache.keys():
+            if key not in ["hash", "msgs", "version"]:
+                cache[key] = [cache[key][0], cache[key][1][:2], cache[key][2]]
+
         if exists:
             d = f"Scanning '{cache_path}' images and labels... {nf} found, {nm} missing, {ne} empty, {nc} corrupted"
             tqdm(None, desc=prefix + d, total=n, initial=n)  # display cache results
