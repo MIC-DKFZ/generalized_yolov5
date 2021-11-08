@@ -3,12 +3,12 @@ from sklearn.model_selection import train_test_split
 from shutil import copyfile
 from tqdm import tqdm
 
-metadata_path = "/dkfz/cluster/gpu/data/OE0441/k539i/original/node21/proccessed_data/metadata.csv"
-img_load_dir = "/dkfz/cluster/gpu/data/OE0441/k539i/original/node21/proccessed_data/images/"
-img_train_save_dir = "/dkfz/cluster/gpu/data/OE0441/k539i/preprocessed/node21/train/images/"
-img_val_save_dir = "/dkfz/cluster/gpu/data/OE0441/k539i/preprocessed/node21/val/images/"
-label_train_save_dir = "/dkfz/cluster/gpu/data/OE0441/k539i/preprocessed/node21/train/labels/"
-label_val_save_dir = "/dkfz/cluster/gpu/data/OE0441/k539i/preprocessed/node21/val/labels/"
+metadata_path = "/home/k539i/Documents/datasets/original/node21/proccessed_data/metadata.csv"
+img_load_dir = "/home/k539i/Documents/datasets/original/node21/proccessed_data/images/"
+img_train_save_dir = "/home/k539i/Documents/datasets/preprocessed/node21/train/images/"
+img_val_save_dir = "/home/k539i/Documents/datasets/preprocessed/node21/val/images/"
+label_train_save_dir = "/home/k539i/Documents/datasets/preprocessed/node21/train/labels/"
+label_val_save_dir = "/home/k539i/Documents/datasets/preprocessed/node21/val/labels/"
 
 img_width = 1024
 img_height = 1024
@@ -35,12 +35,12 @@ train_set, val_set = train_test_split(positive_set, test_size=val_set_ratio)
 for entry in tqdm(train_set):
     copyfile(img_load_dir + entry["name"], img_train_save_dir + entry["name"])
     with open(label_train_save_dir + entry["name"][:-4] + ".txt", 'w') as f:
-        f.write("{} {} {} {} {}".format(1, entry["x"], entry["y"], entry["width"], entry["height"]))
+        f.write("{} {} {} {} {}".format(0, entry["x"], entry["y"], entry["width"], entry["height"]))
 
 for entry in tqdm(val_set):
     copyfile(img_load_dir + entry["name"], img_val_save_dir + entry["name"])
     with open(label_val_save_dir + entry["name"][:-4] + ".txt", 'w') as f:
-        f.write("{} {} {} {} {}".format(1, entry["x"], entry["y"], entry["width"], entry["height"]))
+        f.write("{} {} {} {} {}".format(0, entry["x"], entry["y"], entry["width"], entry["height"]))
 
 
 train_set, val_set = train_test_split(negative_set, test_size=val_set_ratio)
