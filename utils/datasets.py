@@ -580,8 +580,7 @@ class LoadImagesAndLabels(Dataset):
 
             # MixUp augmentation
             if random.random() < hyp['mixup']:
-                img, labels = mixup(img, labels, *load_mosaic(self, random.randint(0, self.n - 1), middle_value=self.mosaic_fill_value, dtype=self.mosaic_dtype))
-
+                img, labels = mixup(img, labels, *load_mosaic(self, random.randint(0, self.n - 1), middle_value=self.mosaic_fill_value, dtype=self.mosaic_dtype), dtype=self.mosaic_dtype)
         else:
             # Load image
             img, (h0, w0), (h, w) = load_image(self, index)

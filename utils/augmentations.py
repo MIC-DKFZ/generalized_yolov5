@@ -168,7 +168,7 @@ def random_perspective(im, targets=(), segments=(), degrees=10, translate=.1, sc
         else:  # affine
             # im = cv2.warpAffine(im, M[:2], dsize=(width, height), borderValue=(bordervalue, bordervalue, bordervalue))
             tform = AffineTransform(matrix=M)
-            _im = warp(im[..., 0], tform.inverse, output_shape=(width, height), mode='constant', cval=bordervalue)
+            _im = warp(im[..., 0], tform.inverse, output_shape=(width, height), mode='constant', cval=bordervalue, preserve_range=True)
             im = np.stack((_im,) * 3, axis=-1)
 
     # Visualize
@@ -267,10 +267,10 @@ def cutout(im, labels, p=0.5):
     return labels
 
 
-def mixup(im, labels, im2, labels2):
+def mixup(im, labels, im2, labels2, dtype=np.uint8):
     # Applies MixUp augmentation https://arxiv.org/pdf/1710.09412.pdf
     r = np.random.beta(32.0, 32.0)  # mixup ratio, alpha=beta=32.0
-    im = (im * r + im2 * (1 - r)).astype(np.uint8)
+    im = (im * r + im2 * (1 - r)).astype(dtype)
     labels = np.concatenate((labels, labels2), 0)
     return im, labels
 
