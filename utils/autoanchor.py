@@ -33,7 +33,8 @@ def check_anchors(dataset, model, thr=4.0, imgsz=640):
     # wh = torch.tensor(np.concatenate([l[:, 3:5] * s for s, l in zip(shapes * scale, dataset.labels)])).float()  # wh
     tmp = []
     for s, l in zip(shapes * scale, dataset.labels):
-        tmp.append(l[:, 3:5] * s)
+        if l.shape[0] > 0:
+            tmp.append(l[:, 3:5] * s)
     wh = torch.tensor(np.concatenate(tmp)).float()
 
 

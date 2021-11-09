@@ -389,7 +389,7 @@ class LoadImagesAndLabels(Dataset):
     cache_version = 0.6  # dataset labels *.cache version
 
     def __init__(self, path, img_size=640, batch_size=16, augment=False, hyp=None, rect=False, image_weights=False,
-                 cache_images=False, single_cls=False, stride=32, pad=0.0, prefix=''):
+                 cache_images=False, single_cls=False, stride=32, pad=0.0, prefix='', mosaic_fill_value=2047, mosaic_dtype=np.int):
         self.img_size = img_size
         self.augment = augment
         self.hyp = hyp
@@ -400,6 +400,8 @@ class LoadImagesAndLabels(Dataset):
         self.stride = stride
         self.path = path
         self.albumentations = Albumentations() if augment else None
+        self.mosaic_fill_value = mosaic_fill_value
+        self.mosaic_dtype = mosaic_dtype
 
         try:
             f = []  # image files
@@ -573,12 +575,12 @@ class LoadImagesAndLabels(Dataset):
         mosaic = self.mosaic and random.random() < hyp['mosaic']
         if mosaic:
             # Load mosaic
-            img, labels = load_mosaic(self, index)
+            img, labels = load_mosaic(self, index, middle_value=self.mosaic_fill_value, dtype=self.mosaic_dtype)
             shapes = None
 
             # MixUp augmentation
             if random.random() < hyp['mixup']:
-                img, labels = mixup(img, labels, *load_mosaic(self, random.randint(0, self.n - 1)))
+                img, labels = mixup(img, labels, *load_mosaic(self, random.randint(0, self.n - 1), middle_value=self.mosaic_fill_value, dtype=self.mosaic_dtype))
 
         else:
             # Load image
@@ -611,7 +613,8 @@ class LoadImagesAndLabels(Dataset):
             nl = len(labels)  # update after albumentations
 
             # HSV color-space
-            augment_hsv(img, hgain=hyp['hsv_h'], sgain=hyp['hsv_s'], vgain=hyp['hsv_v'])
+            # Note Karol-G: Not possible for non-natural images
+            # augment_hsv(img, hgain=hyp['hsv_h'], sgain=hyp['hsv_s'], vgain=hyp['hsv_v'])
 
             # Flip up-down
             if random.random() < hyp['flipud']:
@@ -704,6 +707,9 @@ def load_image(self, i):
             path = self.img_files[i]
             # im = cv2.imread(path)  # BGR
             im, im_header = load(path)
+            im = np.rot90(im, k=-1)
+            im = im.astype(np.int)
+            # im = (normalize(im) * 255).astype(np.int)
             # im = im[..., np.newaxis]
             im = np.stack((im,) * 3, axis=-1)
             assert im is not None, f'Image Not Found {path}'
@@ -712,12 +718,30 @@ def load_image(self, i):
         if r != 1:  # if sizes are not equal
             im = cv2.resize(im, (int(w0 * r), int(h0 * r)),
                             interpolation=cv2.INTER_AREA if r < 1 and not self.augment else cv2.INTER_LINEAR)
+        im = im.astype(np.int)
         return im, (h0, w0), im.shape[:2]  # im, hw_original, hw_resized
     else:
         return self.imgs[i], self.img_hw0[i], self.img_hw[i]  # im, hw_original, hw_resized
 
 
-def load_mosaic(self, index):
+def standardize(image, mean=2298, std=1029):
+    return (image - mean) / std
+
+
+def normalize(x, x_min=None, x_max=None):
+    if x_min is None:
+        x_min = x.min()
+
+    if x_max is None:
+        x_max = x.max()
+
+    if x_min == x_max:
+        return x * 0
+    else:
+        return (x - x.min()) / (x.max() - x.min())
+
+
+def load_mosaic(self, index, middle_value=114, dtype=np.uint8):
     # YOLOv5 4-mosaic loader. Loads 1 image + 3 random images into a 4-image mosaic
     labels4, segments4 = [], []
     s = self.img_size
@@ -730,7 +754,7 @@ def load_mosaic(self, index):
 
         # place img in img4
         if i == 0:  # top left
-            img4 = np.full((s * 2, s * 2, img.shape[2]), 114, dtype=np.uint8)  # base image with 4 tiles
+            img4 = np.full((s * 2, s * 2, img.shape[2]), middle_value, dtype=dtype)  # base image with 4 tiles
             x1a, y1a, x2a, y2a = max(xc - w, 0), max(yc - h, 0), xc, yc  # xmin, ymin, xmax, ymax (large image)
             x1b, y1b, x2b, y2b = w - (x2a - x1a), h - (y2a - y1a), w, h  # xmin, ymin, xmax, ymax (small image)
         elif i == 1:  # top right
@@ -762,14 +786,15 @@ def load_mosaic(self, index):
     # img4, labels4 = replicate(img4, labels4)  # replicate
 
     # Augment
-    img4, labels4, segments4 = copy_paste(img4, labels4, segments4, p=self.hyp['copy_paste'])
+    img4, labels4, segments4 = copy_paste(img4, labels4, segments4, p=self.hyp['copy_paste'], max_value=4095, dtype=dtype)
     img4, labels4 = random_perspective(img4, labels4, segments4,
                                        degrees=self.hyp['degrees'],
                                        translate=self.hyp['translate'],
                                        scale=self.hyp['scale'],
                                        shear=self.hyp['shear'],
                                        perspective=self.hyp['perspective'],
-                                       border=self.mosaic_border)  # border to remove
+                                       border=self.mosaic_border,
+                                       bordervalue=middle_value)  # border to remove
 
     return img4, labels4
 
@@ -933,7 +958,7 @@ def verify_image_label(args):
         # im = im[..., np.newaxis]
         im = np.stack((im,) * 3, axis=-1)
         # shape = exif_size(im)  # image size
-        shape = im.shape
+        shape = im.shape[:2]
         assert (shape[0] > 9) & (shape[1] > 9), f'image size {shape} <10 pixels'
         # assert im.format.lower() in IMG_FORMATS, f'invalid image format {im.format}'
         # if im.format.lower() in ('jpg', 'jpeg'):

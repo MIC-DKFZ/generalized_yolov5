@@ -12,6 +12,7 @@ import numpy as np
 
 from utils.general import check_version, colorstr, resample_segments, segment2box
 from utils.metrics import bbox_ioa
+from scipy import ndimage as ndi
 
 
 class Albumentations:
@@ -123,7 +124,7 @@ def letterbox(im, new_shape=(640, 640), color=(114, 114, 114), auto=True, scaleF
 
 
 def random_perspective(im, targets=(), segments=(), degrees=10, translate=.1, scale=.1, shear=10, perspective=0.0,
-                       border=(0, 0)):
+                       border=(0, 0), bordervalue=114):  # bordervalue = 114
     # torchvision.transforms.RandomAffine(degrees=(-10, 10), translate=(0.1, 0.1), scale=(0.9, 1.1), shear=(-10, 10))
     # targets = [cls, xyxy]
 
@@ -162,9 +163,12 @@ def random_perspective(im, targets=(), segments=(), degrees=10, translate=.1, sc
     M = T @ S @ R @ P @ C  # order of operations (right to left) is IMPORTANT
     if (border[0] != 0) or (border[1] != 0) or (M != np.eye(3)).any():  # image changed
         if perspective:
-            im = cv2.warpPerspective(im, M, dsize=(width, height), borderValue=(114, 114, 114))
+            raise RuntimeError("Not implemented for medical images yet.")
+            im = cv2.warpPerspective(im, M, dsize=(width, height), borderValue=(bordervalue, bordervalue, bordervalue))
         else:  # affine
-            im = cv2.warpAffine(im, M[:2], dsize=(width, height), borderValue=(114, 114, 114))
+            # im = cv2.warpAffine(im, M[:2], dsize=(width, height), borderValue=(bordervalue, bordervalue, bordervalue))
+            _im = ndi.affine_transform(im[..., 0], M, output_shape=(width, height), mode='constant', cval=bordervalue)
+            im = np.stack((_im,) * 3, axis=-1)
 
     # Visualize
     # import matplotlib.pyplot as plt
@@ -211,12 +215,12 @@ def random_perspective(im, targets=(), segments=(), degrees=10, translate=.1, sc
     return im, targets
 
 
-def copy_paste(im, labels, segments, p=0.5):
+def copy_paste(im, labels, segments, p=0.5, max_value=255, dtype=np.uint8):
     # Implement Copy-Paste augmentation https://arxiv.org/abs/2012.07177, labels as nx5 np.array(cls, xyxy)
     n = len(segments)
     if p and n:
         h, w, c = im.shape  # height, width, channels
-        im_new = np.zeros(im.shape, np.uint8)
+        im_new = np.zeros(im.shape, dtype)
         for j in random.sample(range(n), k=round(p * n)):
             l, s = labels[j], segments[j]
             box = w - l[3], l[2], w - l[1], l[4]
@@ -224,7 +228,7 @@ def copy_paste(im, labels, segments, p=0.5):
             if (ioa < 0.30).all():  # allow 30% obscuration of existing labels
                 labels = np.concatenate((labels, [[l[0], *box]]), 0)
                 segments.append(np.concatenate((w - s[:, 0:1], s[:, 1:2]), 1))
-                cv2.drawContours(im_new, [segments[j].astype(np.int32)], -1, (255, 255, 255), cv2.FILLED)
+                cv2.drawContours(im_new, [segments[j].astype(np.int)], -1, (max_value, max_value, max_value), cv2.FILLED)
 
         result = cv2.bitwise_and(src1=im, src2=im_new)
         result = cv2.flip(result, 1)  # augment segments (flip left-right)
