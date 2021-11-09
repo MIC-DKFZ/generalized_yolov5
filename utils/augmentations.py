@@ -12,7 +12,7 @@ import numpy as np
 
 from utils.general import check_version, colorstr, resample_segments, segment2box
 from utils.metrics import bbox_ioa
-from scipy import ndimage as ndi
+from skimage.transform import warp, AffineTransform
 
 
 class Albumentations:
@@ -167,7 +167,8 @@ def random_perspective(im, targets=(), segments=(), degrees=10, translate=.1, sc
             im = cv2.warpPerspective(im, M, dsize=(width, height), borderValue=(bordervalue, bordervalue, bordervalue))
         else:  # affine
             # im = cv2.warpAffine(im, M[:2], dsize=(width, height), borderValue=(bordervalue, bordervalue, bordervalue))
-            _im = ndi.affine_transform(im[..., 0], M, output_shape=(width, height), mode='constant', cval=bordervalue)
+            tform = AffineTransform(matrix=M)
+            _im = warp(im[..., 0], tform.inverse, output_shape=(width, height), mode='constant', cval=bordervalue)
             im = np.stack((_im,) * 3, axis=-1)
 
     # Visualize
