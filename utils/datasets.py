@@ -389,7 +389,7 @@ class LoadImagesAndLabels(Dataset):
     cache_version = 0.6  # dataset labels *.cache version
 
     def __init__(self, path, img_size=640, batch_size=16, augment=False, hyp=None, rect=False, image_weights=False,
-                 cache_images=False, single_cls=False, stride=32, pad=0.0, prefix='', mosaic_fill_value=2047, mosaic_dtype=np.int):
+                 cache_images=False, single_cls=False, stride=32, pad=0.0, prefix='', img_fill_value=2047, img_dtype=np.int16):
         self.img_size = img_size
         self.augment = augment
         self.hyp = hyp
@@ -400,8 +400,8 @@ class LoadImagesAndLabels(Dataset):
         self.stride = stride
         self.path = path
         self.albumentations = Albumentations() if augment else None
-        self.mosaic_fill_value = mosaic_fill_value
-        self.mosaic_dtype = mosaic_dtype
+        self.img_fill_value = img_fill_value
+        self.img_dtype = img_dtype
 
         try:
             f = []  # image files
@@ -510,7 +510,7 @@ class LoadImagesAndLabels(Dataset):
                 self.im_cache_dir.mkdir(parents=True, exist_ok=True)
             gb = 0  # Gigabytes of cached images
             self.img_hw0, self.img_hw = [None] * n, [None] * n
-            results = ThreadPool(NUM_THREADS).imap(lambda x: load_image(*x), zip(repeat(self), range(n)))
+            results = ThreadPool(NUM_THREADS).imap(lambda x: load_image(*x, self.img_dtype), zip(repeat(self), range(n)))
             pbar = tqdm(enumerate(results), total=n)
             for i, x in pbar:
                 if cache_images == 'disk':
@@ -575,15 +575,15 @@ class LoadImagesAndLabels(Dataset):
         mosaic = self.mosaic and random.random() < hyp['mosaic']
         if mosaic:
             # Load mosaic
-            img, labels = load_mosaic(self, index, middle_value=self.mosaic_fill_value, dtype=self.mosaic_dtype)
+            img, labels = load_mosaic(self, index, middle_value=self.img_fill_value, dtype=self.img_dtype)
             shapes = None
 
             # MixUp augmentation
             if random.random() < hyp['mixup']:
-                img, labels = mixup(img, labels, *load_mosaic(self, random.randint(0, self.n - 1), middle_value=self.mosaic_fill_value, dtype=self.mosaic_dtype), dtype=self.mosaic_dtype)
+                img, labels = mixup(img, labels, *load_mosaic(self, random.randint(0, self.n - 1), middle_value=self.img_fill_value, dtype=self.img_dtype), dtype=self.img_dtype)
         else:
             # Load image
-            img, (h0, w0), (h, w) = load_image(self, index)
+            img, (h0, w0), (h, w) = load_image(self, index, self.img_dtype)
 
             # Letterbox
             shape = self.batch_shapes[self.batch[index]] if self.rect else self.img_size  # final letterboxed shape
@@ -593,6 +593,7 @@ class LoadImagesAndLabels(Dataset):
             labels = self.labels[index].copy()
             if labels.size:  # normalized xywh to pixel xyxy format
                 labels[:, 1:] = xywhn2xyxy(labels[:, 1:], ratio[0] * w, ratio[1] * h, padw=pad[0], padh=pad[1])
+
 
             if self.augment:
                 img, labels = random_perspective(img, labels,
@@ -633,6 +634,9 @@ class LoadImagesAndLabels(Dataset):
         labels_out = torch.zeros((nl, 6))
         if nl:
             labels_out[:, 1:] = torch.from_numpy(labels)
+
+        img = img.astype(np.float32)
+        img = (img - 2298) / 1029
 
         # Convert
         img = img.transpose((2, 0, 1))[::-1]  # HWC to CHW, BGR to RGB
@@ -695,7 +699,7 @@ class LoadImagesAndLabels(Dataset):
 #     else:
 #         return self.imgs[i], self.img_hw0[i], self.img_hw[i]  # im, hw_original, hw_resized
 
-def load_image(self, i):
+def load_image(self, i, img_dtype):
     # loads 1 image from dataset index 'i', returns im, original hw, resized hw
     im = self.imgs[i]
     if im is None:  # not cached in ram
@@ -707,7 +711,7 @@ def load_image(self, i):
             # im = cv2.imread(path)  # BGR
             im, im_header = load(path)
             im = np.rot90(im, k=-1)
-            im = im.astype(np.int)
+            im = im.astype(img_dtype)
             # im = (normalize(im) * 255).astype(np.int)
             # im = im[..., np.newaxis]
             im = np.stack((im,) * 3, axis=-1)
@@ -717,7 +721,15 @@ def load_image(self, i):
         if r != 1:  # if sizes are not equal
             im = cv2.resize(im, (int(w0 * r), int(h0 * r)),
                             interpolation=cv2.INTER_AREA if r < 1 and not self.augment else cv2.INTER_LINEAR)
-        im = im.astype(np.int)
+        im = im.astype(img_dtype)
+        # label = self.labels[i]
+        # if label.shape[0] == 1:
+        #     x = int(label[0][1] * 1024)
+        #     y = int(label[0][2] * 1024)
+        #     width = int(label[0][3] * 1024)
+        #     height = int(label[0][4] * 1024)
+        #     cv2.rectangle(im, (x, y), (x + width, y + height), (255, 0, 0), thickness=2)
+        #     print("")
         return im, (h0, w0), im.shape[:2]  # im, hw_original, hw_resized
     else:
         return self.imgs[i], self.img_hw0[i], self.img_hw[i]  # im, hw_original, hw_resized
@@ -749,7 +761,7 @@ def load_mosaic(self, index, middle_value=114, dtype=np.uint8):
     random.shuffle(indices)
     for i, index in enumerate(indices):
         # Load image
-        img, _, (h, w) = load_image(self, index)
+        img, _, (h, w) = load_image(self, index, self.img_dtype)
 
         # place img in img4
         if i == 0:  # top left
@@ -806,7 +818,7 @@ def load_mosaic9(self, index):
     random.shuffle(indices)
     for i, index in enumerate(indices):
         # Load image
-        img, _, (h, w) = load_image(self, index)
+        img, _, (h, w) = load_image(self, index, self.img_dtype)
 
         # place img in img9
         if i == 0:  # center
