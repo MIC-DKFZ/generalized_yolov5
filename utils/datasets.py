@@ -389,9 +389,9 @@ class LoadImagesAndLabels(Dataset):
     cache_version = 0.6  # dataset labels *.cache version
 
     def __init__(self, path, img_size=640, batch_size=16, augment=False, hyp=None, rect=False, image_weights=False,
-                 cache_images=False, single_cls=False, stride=32, pad=0.0, prefix='', img_fill_value=124, max_value=255, img_dtype=np.uint8, mean=124, std=58, channels=3):
+                 cache_images=False, single_cls=False, stride=32, pad=0.0, prefix='', img_fill_value=2298, max_value=4095, img_dtype=np.int16, mean=2298, std=1029, channels=3):
         self.img_size = img_size
-        self.augment = False  # augment
+        self.augment = augment
         self.hyp = hyp
         self.image_weights = image_weights
         self.rect = False if image_weights else rect
