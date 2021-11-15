@@ -12,71 +12,83 @@ from medpy.io import load
 from PIL import Image
 from pydicom import dcmread
 import imagesize
+import yaml
 
 
-def convert_dataset(metadata_path, img_load_dir, save_dir, key_name, key_x, key_y, key_width, key_height, key_label, convert_bb_size, add_extension, only_with_label, convert2natural_img, val_set_ratio):
-    shutil.rmtree(save_dir)
-    img_train_save_dir = save_dir +"train/images/"
-    img_val_save_dir = save_dir + "val/images/"
-    label_train_save_dir = save_dir + "train/labels/"
-    label_val_save_dir = save_dir + "val/labels/"
+def convert_dataset(config_path):
+    with open(config_path, "r") as stream:
+        try:
+            config = yaml.safe_load(stream)
+        except yaml.YAMLError as exc:
+            print(exc)
+
+    shutil.rmtree(config["save_dir"], ignore_errors=True)
+    img_train_save_dir = config["save_dir"] +"train/images/"
+    img_val_save_dir = config["save_dir"] + "val/images/"
+    label_train_save_dir = config["save_dir"] + "train/labels/"
+    label_val_save_dir = config["save_dir"] + "val/labels/"
 
     Path(img_train_save_dir).mkdir(parents=True, exist_ok=True)
     Path(img_val_save_dir).mkdir(parents=True, exist_ok=True)
     Path(label_train_save_dir).mkdir(parents=True, exist_ok=True)
     Path(label_val_save_dir).mkdir(parents=True, exist_ok=True)
 
-    metadata = pd.read_csv(metadata_path)
+    metadata = pd.read_csv(config["metadata_path"])
 
-    positive_set, negative_set = defaultdict(list), defaultdict(list)
+    positive_set = defaultdict(list)
+    negative_set = []
 
     for index, row in metadata.iterrows():
-        name, x, y, width, height, label = row[key_name], row[key_x], row[key_y], row[key_width], row[key_height], row[key_label]
-        if add_extension is not None:
-            name = name + "." + add_extension
+        name, x, y, width, height, label = row[config["key_name"]], row[config["key_x"]], row[config["key_y"]], row[config["key_width"]], row[config["key_height"]], row[config["key_label"]]
+        if config["add_extension"]:
+            name = name + "." + config["add_extension"]
         if label == 1:
-            if convert_bb_size:
+            if config["convert_bb_size"]:
                 width -= x
                 height -= y
-            img_width, img_height = read_img_metadata(img_load_dir + name)
+            img_width, img_height = read_img_metadata(config["img_load_dir"] + name)
             x /= img_width
             y /= img_height
             width /= img_width
             height /= img_height
             positive_set[name].append({"x": x, "y": y, "width": width, "height": height})
         else:
-            negative_set[name].append({"x": x, "y": y, "width": width, "height": height})
+            negative_set.append(name)
 
-    train_set, val_set = train_test_split(list(positive_set.keys()), test_size=val_set_ratio)
+    train_set, val_set = train_test_split(list(positive_set.keys()), test_size=config["val_set_ratio"])
 
     for name in tqdm(train_set):
-        copy_img(img_load_dir + name, img_train_save_dir + name, convert2natural_img)
+        copy_img(config["img_load_dir"] + name, img_train_save_dir + name, config["convert2natural_img"])
         with open(label_train_save_dir + name[:-4] + ".txt", 'w') as f:
             for entry in positive_set[name]:
                 f.write("{} {} {} {} {} \n".format(0, entry["x"], entry["y"], entry["width"], entry["height"]))
 
     for name in tqdm(val_set):
-        copy_img(img_load_dir + name, img_val_save_dir + name, convert2natural_img)
+        copy_img(config["img_load_dir"] + name, img_val_save_dir + name, config["convert2natural_img"])
         with open(label_val_save_dir + name[:-4] + ".txt", 'w') as f:
             for entry in positive_set[name]:
                 f.write("{} {} {} {} {} \n".format(0, entry["x"], entry["y"], entry["width"], entry["height"]))
 
-    if not only_with_label:
-        train_set, val_set = train_test_split(list(negative_set.keys()), test_size=val_set_ratio)
+    if not config["only_with_label"]:
+        train_set, val_set = train_test_split(negative_set, test_size=config["val_set_ratio"])
 
         for name in tqdm(train_set):
-            copy_img(img_load_dir + name, img_train_save_dir + name, convert2natural_img)
+            copy_img(config["img_load_dir"] + name, img_train_save_dir + name, config["convert2natural_img"])
 
         for name in tqdm(val_set):
-            copy_img(img_load_dir + name, img_val_save_dir + name, convert2natural_img)
+            copy_img(config["img_load_dir"] + name, img_val_save_dir + name, config["convert2natural_img"])
 
 
 def read_img_metadata(filename):
     extension = filename[-3:]
     if extension in ["dcm", "mha"]:
-        metadata = dcmread(filename, stop_before_pixels=True)
-        width = metadata["Columns"].value
-        height = metadata["Rows"].value
+        try:
+            metadata = dcmread(filename, stop_before_pixels=True)
+            width = metadata["Columns"].value
+            height = metadata["Rows"].value
+        except Exception as e:
+            image, im_header = load(filename)
+            height, width = image.shape[:2]
     else:
         width, height = imagesize.get(filename)
     return width, height
@@ -86,7 +98,10 @@ def copy_img(load_filename, save_filename, convert2natural_img):
     extension = load_filename[-3:]
     if convert2natural_img and extension in ["dcm", "mha"]:
         image, im_header = load(load_filename)
-        image = (normalize(image) * 255).astype(np.int)
+        image = np.rot90(image, k=-1)
+        image = np.fliplr(image)
+        image = image.squeeze()
+        image = (normalize(image) * 255).astype(np.uint8)
         image = Image.fromarray(image)
         image.save(save_filename[:-3] + ".png")
     elif not convert2natural_img:
@@ -133,22 +148,8 @@ def compute_mean_std(load_dir):
 
 
 if __name__ == "__main__":
-    metadata_path = "/home/k539i/Documents/datasets/original/pneumonia_object_detection/stage_2_train_labels.csv"
-    img_load_dir = "/home/k539i/Documents/datasets/original/pneumonia_object_detection/stage_2_train_images/"
-    save_dir = "/home/k539i/Documents/datasets/preprocessed/pneumonia_object_detection/"
-    key_name = "patientId"
-    key_x = "x"
-    key_y = "y"
-    key_width = "width"
-    key_height = "height"
-    key_label = "Target"
-    convert_bb_size = False
-    add_extension = "dcm"
-    only_with_label = False
-    convert2natural_img = False
-    val_set_ratio = 0.3
+    config_path = "/home/k539i/Documents/datasets/original/node21/yolov5_convert_config_255.yaml"
+    convert_dataset(config_path)
 
-    convert_dataset(metadata_path, img_load_dir, save_dir, key_name, key_x, key_y, key_width, key_height, key_label, convert_bb_size, add_extension, only_with_label, convert2natural_img, val_set_ratio)
-
-    # load_dir = "/home/k539i/Documents/datasets/preprocessed/node21/train/images/"
+    # load_dir = "/home/k539i/Documents/datasets/original/pneumonia_object_detection/stage_2_train_images/"
     # compute_mean_std(load_dir)

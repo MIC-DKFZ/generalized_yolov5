@@ -169,7 +169,7 @@ def random_perspective(im, targets=(), segments=(), degrees=10, translate=.1, sc
             # im = cv2.warpAffine(im, M[:2], dsize=(width, height), borderValue=(bordervalue, bordervalue, bordervalue))
             tform = AffineTransform(matrix=M)
             _im = warp(im[..., 0], tform.inverse, output_shape=(width, height), mode='constant', cval=bordervalue, preserve_range=True)
-            im = np.stack((_im,) * 3, axis=-1)
+            im = np.stack((_im,) * im.shape[2], axis=-1)
 
     # Visualize
     # import matplotlib.pyplot as plt

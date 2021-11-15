@@ -34,7 +34,7 @@ from medpy.io import load, save
 
 # Parameters
 HELP_URL = 'https://github.com/ultralytics/yolov5/wiki/Train-Custom-Data'
-IMG_FORMATS = ['mha']  # acceptable image suffixes
+IMG_FORMATS = ['mha', 'dcm']  # acceptable image suffixes
 VID_FORMATS = ['mov', 'avi', 'mp4', 'mpg', 'mpeg', 'm4v', 'wmv', 'mkv']  # acceptable video suffixes
 NUM_THREADS = min(8, os.cpu_count())  # number of multiprocessing threads
 
@@ -389,9 +389,9 @@ class LoadImagesAndLabels(Dataset):
     cache_version = 0.6  # dataset labels *.cache version
 
     def __init__(self, path, img_size=640, batch_size=16, augment=False, hyp=None, rect=False, image_weights=False,
-                 cache_images=False, single_cls=False, stride=32, pad=0.0, prefix='', img_fill_value=2047, img_dtype=np.int16):
+                 cache_images=False, single_cls=False, stride=32, pad=0.0, prefix='', img_fill_value=124, max_value=255, img_dtype=np.uint8, mean=124, std=58, channels=3):
         self.img_size = img_size
-        self.augment = augment
+        self.augment = False  # augment
         self.hyp = hyp
         self.image_weights = image_weights
         self.rect = False if image_weights else rect
@@ -402,6 +402,10 @@ class LoadImagesAndLabels(Dataset):
         self.albumentations = Albumentations() if augment else None
         self.img_fill_value = img_fill_value
         self.img_dtype = img_dtype
+        self.max_value = max_value
+        self.mean = mean
+        self.std = std
+        self.channels = channels
 
         try:
             f = []  # image files
@@ -510,7 +514,7 @@ class LoadImagesAndLabels(Dataset):
                 self.im_cache_dir.mkdir(parents=True, exist_ok=True)
             gb = 0  # Gigabytes of cached images
             self.img_hw0, self.img_hw = [None] * n, [None] * n
-            results = ThreadPool(NUM_THREADS).imap(lambda x: load_image(*x, self.img_dtype), zip(repeat(self), range(n)))
+            results = ThreadPool(NUM_THREADS).imap(lambda x: load_image(*x, self.img_dtype, self.channels), zip(repeat(self), range(n)))
             pbar = tqdm(enumerate(results), total=n)
             for i, x in pbar:
                 if cache_images == 'disk':
@@ -575,15 +579,15 @@ class LoadImagesAndLabels(Dataset):
         mosaic = self.mosaic and random.random() < hyp['mosaic']
         if mosaic:
             # Load mosaic
-            img, labels = load_mosaic(self, index, middle_value=self.img_fill_value, dtype=self.img_dtype)
+            img, labels = load_mosaic(self, index, img_fill_value=self.img_fill_value, max_value=self.max_value, dtype=self.img_dtype, channels=self.channels)
             shapes = None
 
             # MixUp augmentation
             if random.random() < hyp['mixup']:
-                img, labels = mixup(img, labels, *load_mosaic(self, random.randint(0, self.n - 1), middle_value=self.img_fill_value, dtype=self.img_dtype), dtype=self.img_dtype)
+                img, labels = mixup(img, labels, *load_mosaic(self, random.randint(0, self.n - 1), img_fill_value=self.img_fill_value, max_value=self.max_value, dtype=self.img_dtype, channels=self.channels), dtype=self.img_dtype)
         else:
             # Load image
-            img, (h0, w0), (h, w) = load_image(self, index, self.img_dtype)
+            img, (h0, w0), (h, w) = load_image(self, index, self.img_dtype, self.channels)
 
             # Letterbox
             shape = self.batch_shapes[self.batch[index]] if self.rect else self.img_size  # final letterboxed shape
@@ -636,7 +640,7 @@ class LoadImagesAndLabels(Dataset):
             labels_out[:, 1:] = torch.from_numpy(labels)
 
         img = img.astype(np.float32)
-        img = (img - 2298) / 1029
+        img = (img - self.mean) / self.std
 
         # Convert
         img = img.transpose((2, 0, 1))[::-1]  # HWC to CHW, BGR to RGB
@@ -699,7 +703,7 @@ class LoadImagesAndLabels(Dataset):
 #     else:
 #         return self.imgs[i], self.img_hw0[i], self.img_hw[i]  # im, hw_original, hw_resized
 
-def load_image(self, i, img_dtype):
+def load_image(self, i, img_dtype, channels):
     # loads 1 image from dataset index 'i', returns im, original hw, resized hw
     im = self.imgs[i]
     if im is None:  # not cached in ram
@@ -710,11 +714,13 @@ def load_image(self, i, img_dtype):
             path = self.img_files[i]
             # im = cv2.imread(path)  # BGR
             im, im_header = load(path)
+            im = im.squeeze()
             im = np.rot90(im, k=-1)
+            im = np.fliplr(im)
             im = im.astype(img_dtype)
             # im = (normalize(im) * 255).astype(np.int)
             # im = im[..., np.newaxis]
-            im = np.stack((im,) * 3, axis=-1)
+            im = np.stack((im,) * channels, axis=-1)
             assert im is not None, f'Image Not Found {path}'
         h0, w0 = im.shape[:2]  # orig hw
         r = self.img_size / max(h0, w0)  # ratio
@@ -752,7 +758,7 @@ def normalize(x, x_min=None, x_max=None):
         return (x - x.min()) / (x.max() - x.min())
 
 
-def load_mosaic(self, index, middle_value=114, dtype=np.uint8):
+def load_mosaic(self, index, img_fill_value=114, max_value=255, dtype=np.uint8, channels=3):
     # YOLOv5 4-mosaic loader. Loads 1 image + 3 random images into a 4-image mosaic
     labels4, segments4 = [], []
     s = self.img_size
@@ -761,11 +767,11 @@ def load_mosaic(self, index, middle_value=114, dtype=np.uint8):
     random.shuffle(indices)
     for i, index in enumerate(indices):
         # Load image
-        img, _, (h, w) = load_image(self, index, self.img_dtype)
+        img, _, (h, w) = load_image(self, index, self.img_dtype, channels)
 
         # place img in img4
         if i == 0:  # top left
-            img4 = np.full((s * 2, s * 2, img.shape[2]), middle_value, dtype=dtype)  # base image with 4 tiles
+            img4 = np.full((s * 2, s * 2, img.shape[2]), img_fill_value, dtype=dtype)  # base image with 4 tiles
             x1a, y1a, x2a, y2a = max(xc - w, 0), max(yc - h, 0), xc, yc  # xmin, ymin, xmax, ymax (large image)
             x1b, y1b, x2b, y2b = w - (x2a - x1a), h - (y2a - y1a), w, h  # xmin, ymin, xmax, ymax (small image)
         elif i == 1:  # top right
@@ -797,7 +803,7 @@ def load_mosaic(self, index, middle_value=114, dtype=np.uint8):
     # img4, labels4 = replicate(img4, labels4)  # replicate
 
     # Augment
-    img4, labels4, segments4 = copy_paste(img4, labels4, segments4, p=self.hyp['copy_paste'], max_value=4095, dtype=dtype)
+    img4, labels4, segments4 = copy_paste(img4, labels4, segments4, p=self.hyp['copy_paste'], max_value=max_value, dtype=dtype)
     img4, labels4 = random_perspective(img4, labels4, segments4,
                                        degrees=self.hyp['degrees'],
                                        translate=self.hyp['translate'],
@@ -805,12 +811,12 @@ def load_mosaic(self, index, middle_value=114, dtype=np.uint8):
                                        shear=self.hyp['shear'],
                                        perspective=self.hyp['perspective'],
                                        border=self.mosaic_border,
-                                       bordervalue=middle_value)  # border to remove
+                                       bordervalue=img_fill_value)  # border to remove
 
     return img4, labels4
 
 
-def load_mosaic9(self, index):
+def load_mosaic9(self, index, channels):
     # YOLOv5 9-mosaic loader. Loads 1 image + 8 random images into a 9-image mosaic
     labels9, segments9 = [], []
     s = self.img_size
@@ -818,7 +824,7 @@ def load_mosaic9(self, index):
     random.shuffle(indices)
     for i, index in enumerate(indices):
         # Load image
-        img, _, (h, w) = load_image(self, index, self.img_dtype)
+        img, _, (h, w) = load_image(self, index, self.img_dtype, channels)
 
         # place img in img9
         if i == 0:  # center
