@@ -93,6 +93,7 @@ def replicate(im, labels):
 def letterbox(im, new_shape=(640, 640), color=(114, 114, 114), auto=True, scaleFill=False, scaleup=True, stride=32):
     # Resize and pad image while meeting stride-multiple constraints
     shape = im.shape[:2]  # current shape [height, width]
+    channels = im.shape[2]
     if isinstance(new_shape, int):
         new_shape = (new_shape, new_shape)
 
@@ -120,6 +121,8 @@ def letterbox(im, new_shape=(640, 640), color=(114, 114, 114), auto=True, scaleF
     top, bottom = int(round(dh - 0.1)), int(round(dh + 0.1))
     left, right = int(round(dw - 0.1)), int(round(dw + 0.1))
     im = cv2.copyMakeBorder(im, top, bottom, left, right, cv2.BORDER_CONSTANT, value=color)  # add border
+    if len(im.shape) == 2:
+        im = np.stack((im,) * channels, axis=-1)
     return im, ratio, (dw, dh)
 
 
@@ -168,8 +171,10 @@ def random_perspective(im, targets=(), segments=(), degrees=10, translate=.1, sc
         else:  # affine
             # im = cv2.warpAffine(im, M[:2], dsize=(width, height), borderValue=(bordervalue, bordervalue, bordervalue))
             tform = AffineTransform(matrix=M)
+            dtype = im.dtype
             _im = warp(im[..., 0], tform.inverse, output_shape=(width, height), mode='constant', cval=bordervalue, preserve_range=True)
             im = np.stack((_im,) * im.shape[2], axis=-1)
+            im = im.astype(dtype)
 
     # Visualize
     # import matplotlib.pyplot as plt

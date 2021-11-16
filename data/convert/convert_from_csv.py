@@ -8,11 +8,12 @@ import numpy as np
 from pathlib import Path
 from collections import defaultdict
 import shutil
-from medpy.io import load
+# from medpy.io import load
 from PIL import Image
 from pydicom import dcmread
 import imagesize
 import yaml
+import SimpleITK as sitk
 
 
 def convert_dataset(config_path):
@@ -87,7 +88,7 @@ def read_img_metadata(filename):
             width = metadata["Columns"].value
             height = metadata["Rows"].value
         except Exception as e:
-            image, im_header = load(filename)
+            image = _load_image(filename)
             height, width = image.shape[:2]
     else:
         width, height = imagesize.get(filename)
@@ -97,9 +98,7 @@ def read_img_metadata(filename):
 def copy_img(load_filename, save_filename, convert2natural_img):
     extension = load_filename[-3:]
     if convert2natural_img and extension in ["dcm", "mha"]:
-        image, im_header = load(load_filename)
-        image = np.rot90(image, k=-1)
-        image = np.fliplr(image)
+        image = _load_image(load_filename)
         image = image.squeeze()
         image = (normalize(image) * 255).astype(np.uint8)
         image = Image.fromarray(image)
@@ -108,6 +107,23 @@ def copy_img(load_filename, save_filename, convert2natural_img):
         copyfile(load_filename, save_filename)
     else:
         raise NotImplementedError("Image format not implemented.")
+
+
+def _load_image(path):
+    im = sitk.GetArrayFromImage(sitk.ReadImage(path))
+    # im = im.transpose((2, 1, 0))
+
+    # im, im_header = load(path)
+    # im = np.rot90(im, k=-1)
+    # im = np.fliplr(im)
+    return im
+
+
+def _save_image(im, filename, compress=False):
+    im = sitk.GetImageFromArray((im))
+    sitk.WriteImage(im, filename, useCompression=compress)
+
+    # save(im, filename, use_compression=compress)
 
 
 def normalize(x, x_min=None, x_max=None):
@@ -130,7 +146,7 @@ def compute_mean_std(load_dir):
 
     mean, std, min_value, max_value = 0, 0, 0, 0
     for filename in tqdm(filenames):
-        image, _ = load(load_dir + filename)
+        image = _load_image(load_dir + filename)
         mean += image.mean()
         std += image.std()
         if min_value > image.min():

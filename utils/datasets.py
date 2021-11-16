@@ -31,6 +31,7 @@ from utils.general import (LOGGER, check_dataset, check_requirements, check_yaml
                            xywh2xyxy, xywhn2xyxy, xyxy2xywhn)
 from utils.torch_utils import torch_distributed_zero_first
 from medpy.io import load, save
+import SimpleITK as sitk
 
 # Parameters
 HELP_URL = 'https://github.com/ultralytics/yolov5/wiki/Train-Custom-Data'
@@ -389,7 +390,7 @@ class LoadImagesAndLabels(Dataset):
     cache_version = 0.6  # dataset labels *.cache version
 
     def __init__(self, path, img_size=640, batch_size=16, augment=False, hyp=None, rect=False, image_weights=False,
-                 cache_images=False, single_cls=False, stride=32, pad=0.0, prefix='', img_fill_value=2298, max_value=4095, img_dtype=np.int16, mean=2298, std=1029, channels=3):
+                 cache_images=False, single_cls=False, stride=32, pad=0.0, prefix=''):
         self.img_size = img_size
         self.augment = augment
         self.hyp = hyp
@@ -400,12 +401,12 @@ class LoadImagesAndLabels(Dataset):
         self.stride = stride
         self.path = path
         self.albumentations = Albumentations() if augment else None
-        self.img_fill_value = img_fill_value
-        self.img_dtype = img_dtype
-        self.max_value = max_value
-        self.mean = mean
-        self.std = std
-        self.channels = channels
+        self.img_fill_value = hyp["img_fill_value"]
+        self.img_dtype = np.dtype(hyp["img_dtype"])
+        self.max_value = hyp["max_value"]
+        self.mean = hyp["mean"]
+        self.std = hyp["std"]
+        self.channels = hyp["channels"]
 
         try:
             f = []  # image files
@@ -646,6 +647,9 @@ class LoadImagesAndLabels(Dataset):
         img = img.transpose((2, 0, 1))[::-1]  # HWC to CHW, BGR to RGB
         img = np.ascontiguousarray(img)
 
+        if img.shape[0] == 1:
+            img = img.copy()
+
         return torch.from_numpy(img), labels_out, self.img_files[index], shapes
 
     @staticmethod
@@ -713,10 +717,13 @@ def load_image(self, i, img_dtype, channels):
         else:  # read image
             path = self.img_files[i]
             # im = cv2.imread(path)  # BGR
-            im, im_header = load(path)
+            # im, im_header = load(path)
+            # im = sitk.GetArrayFromImage(sitk.ReadImage(path))
+            # im = im.transpose((2, 1, 0))
+            im = _load_image(path)
             im = im.squeeze()
-            im = np.rot90(im, k=-1)
-            im = np.fliplr(im)
+            # im = np.rot90(im, k=-1)
+            # im = np.fliplr(im)
             im = im.astype(img_dtype)
             # im = (normalize(im) * 255).astype(np.int)
             # im = im[..., np.newaxis]
@@ -725,8 +732,9 @@ def load_image(self, i, img_dtype, channels):
         h0, w0 = im.shape[:2]  # orig hw
         r = self.img_size / max(h0, w0)  # ratio
         if r != 1:  # if sizes are not equal
-            im = cv2.resize(im, (int(w0 * r), int(h0 * r)),
-                            interpolation=cv2.INTER_AREA if r < 1 and not self.augment else cv2.INTER_LINEAR)
+            im = cv2.resize(im, (int(w0 * r), int(h0 * r)), interpolation=cv2.INTER_AREA if r < 1 and not self.augment else cv2.INTER_LINEAR)
+            if len(im.shape) == 2:
+                im = np.stack((im,) * channels, axis=-1)
         im = im.astype(img_dtype)
         # label = self.labels[i]
         # if label.shape[0] == 1:
@@ -739,6 +747,23 @@ def load_image(self, i, img_dtype, channels):
         return im, (h0, w0), im.shape[:2]  # im, hw_original, hw_resized
     else:
         return self.imgs[i], self.img_hw0[i], self.img_hw[i]  # im, hw_original, hw_resized
+
+
+def _load_image(path):
+    im = sitk.GetArrayFromImage(sitk.ReadImage(path))
+    # im = im.transpose((2, 1, 0))
+
+    # im, im_header = load(path)
+    # im = np.rot90(im, k=-1)
+    # im = np.fliplr(im)
+    return im
+
+
+def _save_image(im, filename, compress=False):
+    im = sitk.GetImageFromArray((im))
+    sitk.WriteImage(im, filename, useCompression=compress)
+
+    # save(im, filename, use_compression=compress)
 
 
 def standardize(image, mean=2298, std=1029):
@@ -971,7 +996,9 @@ def verify_image_label(args):
         # verify images
         # im = Image.open(im_file)
         # im.verify()  # PIL verify
-        im, im_header = load(im_file)
+        # im, im_header = load(im_file)
+        # im = sitk.GetArrayFromImage(sitk.ReadImage(im_file))
+        im = _load_image(im_file)
         # im = im[..., np.newaxis]
         im = np.stack((im,) * 3, axis=-1)
         # shape = exif_size(im)  # image size
@@ -1047,21 +1074,27 @@ def dataset_stats(path='coco128.yaml', autodownload=False, verbose=False, profil
         f_new = im_dir / Path(f).name  # dataset-hub image filename
         try:  # use PIL
             # im = Image.open(f)
-            im, im_header = load(f)
+            # im, im_header = load(f)
+            # im = sitk.GetArrayFromImage(sitk.ReadImage(f))
+            im = _load_image(f)
             # im = im[..., np.newaxis]
             im = np.stack((im,) * 3, axis=-1)
             r = max_dim / max(im.height, im.width)  # ratio
             if r < 1.0:  # image too large
                 im = im.resize((int(im.width * r), int(im.height * r)))
             # im.save(f_new, quality=75)  # save
-            save(f_new, use_compression=True)
+            # save(f_new, use_compression=True)
+            _save_image(f_new, compress=True)
         except Exception as e:  # use OpenCV
             print(f'WARNING: HUB ops PIL failure {f}: {e}')
             im = cv2.imread(f)
             im_height, im_width = im.shape[:2]
             r = max_dim / max(im_height, im_width)  # ratio
             if r < 1.0:  # image too large
+                channels = im.shape[2]
                 im = cv2.resize(im, (int(im_width * r), int(im_height * r)), interpolation=cv2.INTER_LINEAR)
+                if len(im.shape) == 2:
+                    im = np.stack((im,) * channels, axis=-1)
             cv2.imwrite(str(f_new), im)
 
     zipped, data_dir, yaml_path = unzip(Path(path))
