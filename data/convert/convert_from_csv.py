@@ -102,7 +102,7 @@ def copy_img(load_filename, save_filename, convert2natural_img):
         image = image.squeeze()
         image = (normalize(image) * 255).astype(np.uint8)
         image = Image.fromarray(image)
-        image.save(save_filename[:-3] + ".png")
+        image.save(save_filename[:-4] + ".png")
     elif not convert2natural_img:
         copyfile(load_filename, save_filename)
     else:
