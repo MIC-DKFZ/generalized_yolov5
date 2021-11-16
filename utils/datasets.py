@@ -640,8 +640,9 @@ class LoadImagesAndLabels(Dataset):
         if nl:
             labels_out[:, 1:] = torch.from_numpy(labels)
 
-        img = img.astype(np.float32)
-        img = (img - self.mean) / self.std
+        if hyp["standardize"]:
+            img = img.astype(np.float32)
+            img = (img - self.mean) / self.std
 
         # Convert
         img = img.transpose((2, 0, 1))[::-1]  # HWC to CHW, BGR to RGB
