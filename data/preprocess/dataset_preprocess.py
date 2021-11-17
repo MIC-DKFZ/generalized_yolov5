@@ -16,15 +16,11 @@ import SimpleITK as sitk
 
 
 def convert_dataset(config_path):
-    with open(config_path, "r") as stream:
-        try:
-            config = yaml.safe_load(stream)
-        except yaml.YAMLError as exc:
-            print(exc)
-
+    config = load_config(config_path)
     fold_paths = prepare_folder_structure(config)
-    positive_set, negative_set = preprocess_csv(config)
+    positive_set, negative_set, labels = preprocess_csv(config)
     preprocess_images(config, fold_paths, positive_set, negative_set)
+    generate_yolo_config(config, labels)
 
 
 def prepare_folder_structure(config):
@@ -47,9 +43,11 @@ def preprocess_csv(config):
 
     positive_set = defaultdict(list)
     negative_set = []
+    labels = set()
 
     for index, row in metadata.iterrows():
         name, x, y, width, height, label = row[config["key_name"]], row[config["key_x"]], row[config["key_y"]], row[config["key_width"]], row[config["key_height"]], row[config["key_label"]]
+        labels.add(label)
         if config["add_extension"]:
             name = name + "." + config["add_extension"]
         if label > 0:
@@ -64,7 +62,7 @@ def preprocess_csv(config):
             positive_set[name].append({"label": label, "x": x, "y": y, "width": width, "height": height})
         else:
             negative_set.append(name)
-    return positive_set, negative_set
+    return positive_set, negative_set, labels
 
 
 def preprocess_images(config, fold_paths, positive_set, negative_set):
@@ -84,6 +82,32 @@ def preprocess_images(config, fold_paths, positive_set, negative_set):
     for i, fold in enumerate(tqdm(keys)):
         for name in fold:
             copy_img(config["img_load_dir"] + name, fold_paths[i]["img_path"] + name, config["convert2natural_img"])
+
+
+def generate_yolo_config(config, labels):
+    labels.remove(0)
+    for fold in range(config["cv_folds"]):
+        yolo_config = {}
+        yolo_config["path"] = config["save_dir"]
+        train_folds = list(range(config["cv_folds"]))
+        del train_folds[fold]
+        train_folds = ["./fold_{}/images".format(train_fold) for train_fold in train_folds]
+        yolo_config["train"] = train_folds
+        yolo_config["val"] = "./fold_{}/images".format(fold)
+        yolo_config["nc"] = len(labels)
+        yolo_config["names"] = ["class_{}".format(label) for label in list(labels)]
+
+        with open('{}/fold_{}.yml'.format(config["save_dir"], fold), 'w') as outfile:
+            yaml.dump(yolo_config, outfile, default_flow_style=False)
+
+
+def load_config(config_path):
+    with open(config_path, "r") as stream:
+        try:
+            config = yaml.safe_load(stream)
+        except yaml.YAMLError as exc:
+            print(exc)
+    return config
 
 
 def split_dataset(keys, n_folds):
