@@ -13,6 +13,7 @@ from pydicom import dcmread
 import imagesize
 import yaml
 import SimpleITK as sitk
+import argparse
 
 
 def convert_dataset(config_path):
@@ -59,7 +60,7 @@ def preprocess_csv(config):
             y /= img_height
             width /= img_width
             height /= img_height
-            positive_set[name].append({"label": label, "x": x, "y": y, "width": width, "height": height})
+            positive_set[name].append({"label": label - 1, "x": x, "y": y, "width": width, "height": height})
         else:
             negative_set.append(name)
     return positive_set, negative_set, labels
@@ -97,7 +98,7 @@ def generate_yolo_config(config, labels):
         yolo_config["nc"] = len(labels)
         yolo_config["names"] = ["class_{}".format(label) for label in list(labels)]
 
-        with open('{}/fold_{}.yml'.format(config["save_dir"], fold), 'w') as outfile:
+        with open('{}/fold_{}.yaml'.format(config["save_dir"], fold), 'w') as outfile:
             yaml.dump(yolo_config, outfile, default_flow_style=False)
 
 
@@ -168,18 +169,18 @@ def _save_image(im, filename, compress=False):
     # save(im, filename, use_compression=compress)
 
 
-def normalize(x, limit_source=None, limit_target=None):
-    if limit_source is None:
-        limit_source = (x.min(), x.max)
+def normalize(x, input_range=None, output_range=None):
+    if input_range is None:
+        input_range = (x.min(), x.max())
 
-    if limit_target is None:
-        limit_target = (0, 1)
+    if output_range is None:
+        output_range = (0, 1)
 
-    if limit_source[0] == limit_source[1]:
+    if input_range[0] == input_range[1]:
         return x * 0
 
-    x = (x - limit_source[0]) / (limit_source[1] - limit_source[0])
-    x = x * (limit_target[1] - limit_target[0]) + limit_target[0]
+    x = (x - input_range[0]) / (input_range[1] - input_range[0])
+    x = x * (output_range[1] - output_range[0]) + output_range[0]
     return x
 
 
@@ -208,8 +209,10 @@ def compute_mean_std(load_dir):
 
 
 if __name__ == "__main__":
-    config_path = "/home/k539i/Documents/datasets/original/node21/yolov5_convert_config_255.yaml"
-    convert_dataset(config_path)
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-c', '--config', type=str, help='Path to YAML config.')
+    args = parser.parse_args()
+    convert_dataset(args.config)
 
     # load_dir = "/home/k539i/Documents/datasets/original/pneumonia_object_detection/stage_2_train_images/"
     # compute_mean_std(load_dir)

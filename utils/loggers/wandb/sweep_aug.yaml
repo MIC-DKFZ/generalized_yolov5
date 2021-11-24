@@ -1,0 +1,113 @@
+program: /home/k539i/projects/yolov5/utils/loggers/wandb/sweep.py
+method: bayes
+metric:
+  name: metrics/mAP_0.5
+  goal: maximize
+early_terminate:
+  type: hyperband
+  min_iter: 20
+parameters:
+  data:
+    value: "/dkfz/cluster/gpu/data/OE0441/k539i/preprocessed/node21_255/data.yaml"
+  project:
+    value: "/dkfz/cluster/gpu/checkpoints/OE0441/k539i/yolov5/"
+  img:
+    values: [ 512 ]
+  epochs:
+    values: [ 500 ]
+  batch_size:
+    values: [ 16 ]
+  weights:
+    value: "yolov5n.pt"
+  patience:
+    values: [ 0 ]
+
+  lr0:
+    value: 0.01
+  lrf:
+    value: 0.2
+  momentum:
+    value: 0.937
+  weight_decay:
+    value: 0.0005
+  warmup_epochs:
+    value: 3.0
+  warmup_momentum:
+    value: 0.8
+  warmup_bias_lr:
+    value: 0.1
+  box:
+    value: 0.05
+  cls:
+    value: 0.3
+  cls_pw:
+    value: 1.0
+  obj:
+    value: 0.7
+  obj_pw:
+    value: 1.0
+  iou_t:
+    value: 0.20
+  anchor_t:
+    value: 4.0
+
+  fl_gamma:
+    distribution: uniform
+    min: 0.0
+    max: 0.1
+  hsv_h:
+    value: 0.015
+#    distribution: uniform
+#    min: 0.0
+#    max: 0.9
+  hsv_s:
+    value: 0.7
+#    distribution: uniform
+#    min: 0.0
+#    max: 0.9
+  hsv_v:
+    value: 0.4
+#    distribution: uniform
+#    min: 0.0
+#    max: 0.9
+  degrees:
+    distribution: uniform
+    min: 0.0
+    max: 45.0
+  translate:
+    min: 0.0
+    max: 0.9
+  scale:
+    distribution: uniform
+    min: 0.0
+    max: 0.9
+  shear:
+    value: 0.0
+#    distribution: uniform
+#    min: 0.0
+#    max: 10.0
+  perspective:
+    min: 0.0
+    max: 0.001
+  flipud:
+    value: 0.0
+#    distribution: uniform
+#    min: 0.0
+#    max: 1.0
+  fliplr:
+    value: 0.5
+#    distribution: uniform
+#    min: 0.0
+#    max: 1.0
+  mosaic:
+    distribution: uniform
+    min: 0.5
+    max: 1.0
+  mixup:
+    distribution: uniform
+    min: 0.0
+    max: 1.0
+  copy_paste:
+    distribution: uniform
+    min: 0.0
+    max: 1.0

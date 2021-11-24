@@ -1,0 +1,83 @@
+program: /home/k539i/projects/yolov5/utils/loggers/wandb/sweep.py
+method: bayes
+metric:
+  name: metrics/mAP_0.5
+  goal: maximize
+early_terminate:
+  type: hyperband
+  min_iter: 50
+parameters:
+  data:
+    value: "/dkfz/cluster/gpu/data/OE0441/k539i/preprocessed/node21_255/data.yaml"
+  project:
+    value: "/dkfz/cluster/gpu/checkpoints/OE0441/k539i/yolov5/"
+  img:
+    values: [ 512 ]
+  epochs:
+    values: [ 500 ]
+  batch_size:
+    values: [ 16 ]
+  weights:
+    value: "yolov5m.pt"
+  patience:
+    values: [ 0 ]
+
+  lr0:
+    distribution: normal
+    mu: 0.001
+    sigma: 0.0005
+  lrf:
+    value: 0.2
+  momentum:
+    value: 0.937
+  weight_decay:
+    value: 0.0005
+  warmup_epochs:
+    value: 3.0
+  warmup_momentum:
+    value: 0.8
+  warmup_bias_lr:
+    value: 0.1
+  box:
+    value: 0.05
+  cls:
+    value: 0.3
+  cls_pw:
+    value: 1.0
+  obj:
+    value: 0.7
+  obj_pw:
+    value: 1.0
+  iou_t:
+    value: 0.20
+  anchor_t:
+    value: 4.0
+
+  fl_gamma:
+    value: 0.0
+  hsv_h:
+    value: 0.015
+  hsv_s:
+    value: 0.7
+  hsv_v:
+    value: 0.4
+  degrees:
+    value: 0.0
+  translate:
+    value: 0.1
+  scale:
+    value: 0.9
+  shear:
+    value: 0.0
+  perspective:
+    value: 0.0
+  flipud:
+    value: 0.0
+  fliplr:
+    value: 0.5
+  mosaic:
+    value: 1.0
+  mixup:
+    value: 0.1
+  copy_paste:
+    value: 0.1
