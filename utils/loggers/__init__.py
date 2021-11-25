@@ -33,13 +33,14 @@ except (ImportError, AssertionError):
 
 class Loggers():
     # YOLOv5 Loggers class
-    def __init__(self, save_dir=None, weights=None, opt=None, hyp=None, logger=None, include=LOGGERS):
+    def __init__(self, save_dir=None, weights=None, opt=None, hyp=None, logger=None, include=LOGGERS, log_media=True):
         self.save_dir = save_dir
         self.weights = weights
         self.opt = opt
         self.hyp = hyp
         self.logger = logger  # for printing results to console
         self.include = include
+        self.log_media = log_media
         self.keys = ['train/box_loss', 'train/obj_loss', 'train/cls_loss',  # train loss
                      'metrics/precision', 'metrics/recall', 'metrics/mAP_0.5', 'metrics/mAP_0.5:0.95',  # metrics
                      'val/box_loss', 'val/obj_loss', 'val/cls_loss',  # val loss
@@ -73,7 +74,7 @@ class Loggers():
     def on_pretrain_routine_end(self):
         # Callback runs on pre-train routine end
         paths = self.save_dir.glob('*labels*.jpg')  # training labels
-        if self.wandb:
+        if self.wandb and self.log_media:
             self.wandb.log({"Labels": [wandb.Image(str(x), caption=x.name) for x in paths]})
 
     def on_train_batch_end(self, ni, model, imgs, targets, paths, plots, sync_bn):
@@ -87,7 +88,7 @@ class Loggers():
             if ni < 3:
                 f = self.save_dir / f'train_batch{ni}.jpg'  # filename
                 Thread(target=plot_images, args=(imgs, targets, paths, f), daemon=True).start()
-            if self.wandb and ni == 10:
+            if self.wandb and ni == 10 and self.log_media:
                 files = sorted(self.save_dir.glob('train*.jpg'))
                 self.wandb.log({'Mosaics': [wandb.Image(str(f), caption=f.name) for f in files if f.exists()]})
 
@@ -103,7 +104,7 @@ class Loggers():
 
     def on_val_end(self):
         # Callback runs on val end
-        if self.wandb:
+        if self.wandband and self.log_media:
             files = sorted(self.save_dir.glob('val*.jpg'))
             self.wandb.log({"Validation": [wandb.Image(str(f), caption=f.name) for f in files]})
 
@@ -144,7 +145,8 @@ class Loggers():
                 self.tb.add_image(f.stem, cv2.imread(str(f))[..., ::-1], epoch, dataformats='HWC')
 
         if self.wandb:
-            self.wandb.log({"Results": [wandb.Image(str(f), caption=f.name) for f in files]})
+            if self.log_media:
+                self.wandb.log({"Results": [wandb.Image(str(f), caption=f.name) for f in files]})
             # Calling wandb.log. TODO: Refactor this into WandbLogger.log_model
             if not self.opt.evolve:
                 wandb.log_artifact(str(best if best.exists() else last), type='model',
