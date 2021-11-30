@@ -12,8 +12,8 @@ def preprocess(load_file, save_file):
 
 
 if __name__ == "__main__":
-    load_dir = "/home/k539i/Documents/syncthing-DKFZ/evaluation/yolov5/Node21/raw/"
-    save_dir = "/home/k539i/Documents/syncthing-DKFZ/evaluation/yolov5/Node21/preprocessed/"
-    name = "Scratch vs Pretrained/Scratch vs Pretrained.csv"
+    load_dir = "D:/syncthing-DKFZ/evaluation/yolov5/Node21/raw/"
+    save_dir = "D:/syncthing-DKFZ/evaluation/yolov5/Node21/preprocessed/"
+    name = "Image Size.csv"
 
     preprocess(join(load_dir, name), join(save_dir, name))
