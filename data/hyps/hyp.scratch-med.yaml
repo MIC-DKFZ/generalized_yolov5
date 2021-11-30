@@ -32,3 +32,11 @@ fliplr: 0.5  # image flip left-right (probability)
 mosaic: 1.0  # image mosaic (probability)
 mixup: 0.1  # image mixup (probability)
 copy_paste: 0.0  # segment copy-paste (probability)
+
+standardize: True
+img_fill_value: 2298
+max_value: 4095
+img_dtype: 'int16'
+mean: 2298
+std: 1029
+channels: 3

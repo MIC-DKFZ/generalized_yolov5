@@ -11,6 +11,7 @@ import numpy as np
 
 from utils.general import LOGGER, check_version, colorstr, resample_segments, segment2box
 from utils.metrics import bbox_ioa
+from skimage.transform import warp, AffineTransform
 
 
 class Albumentations:
@@ -91,6 +92,7 @@ def replicate(im, labels):
 def letterbox(im, new_shape=(640, 640), color=(114, 114, 114), auto=True, scaleFill=False, scaleup=True, stride=32):
     # Resize and pad image while meeting stride-multiple constraints
     shape = im.shape[:2]  # current shape [height, width]
+    channels = im.shape[2]
     if isinstance(new_shape, int):
         new_shape = (new_shape, new_shape)
 
@@ -118,11 +120,13 @@ def letterbox(im, new_shape=(640, 640), color=(114, 114, 114), auto=True, scaleF
     top, bottom = int(round(dh - 0.1)), int(round(dh + 0.1))
     left, right = int(round(dw - 0.1)), int(round(dw + 0.1))
     im = cv2.copyMakeBorder(im, top, bottom, left, right, cv2.BORDER_CONSTANT, value=color)  # add border
+    if len(im.shape) == 2:
+        im = np.stack((im,) * channels, axis=-1)
     return im, ratio, (dw, dh)
 
 
 def random_perspective(im, targets=(), segments=(), degrees=10, translate=.1, scale=.1, shear=10, perspective=0.0,
-                       border=(0, 0)):
+                       border=(0, 0), bordervalue=114):  # bordervalue = 114
     # torchvision.transforms.RandomAffine(degrees=(-10, 10), translate=(0.1, 0.1), scale=(0.9, 1.1), shear=(-10, 10))
     # targets = [cls, xyxy]
 
@@ -161,9 +165,15 @@ def random_perspective(im, targets=(), segments=(), degrees=10, translate=.1, sc
     M = T @ S @ R @ P @ C  # order of operations (right to left) is IMPORTANT
     if (border[0] != 0) or (border[1] != 0) or (M != np.eye(3)).any():  # image changed
         if perspective:
-            im = cv2.warpPerspective(im, M, dsize=(width, height), borderValue=(114, 114, 114))
+            raise RuntimeError("Not implemented for medical images yet.")
+            im = cv2.warpPerspective(im, M, dsize=(width, height), borderValue=(bordervalue, bordervalue, bordervalue))
         else:  # affine
-            im = cv2.warpAffine(im, M[:2], dsize=(width, height), borderValue=(114, 114, 114))
+            # im = cv2.warpAffine(im, M[:2], dsize=(width, height), borderValue=(bordervalue, bordervalue, bordervalue))
+            tform = AffineTransform(matrix=M)
+            dtype = im.dtype
+            _im = warp(im[..., 0], tform.inverse, output_shape=(width, height), mode='constant', cval=bordervalue, preserve_range=True)
+            im = np.stack((_im,) * im.shape[2], axis=-1)
+            im = im.astype(dtype)
 
     # Visualize
     # import matplotlib.pyplot as plt
@@ -210,12 +220,12 @@ def random_perspective(im, targets=(), segments=(), degrees=10, translate=.1, sc
     return im, targets
 
 
-def copy_paste(im, labels, segments, p=0.5):
+def copy_paste(im, labels, segments, p=0.5, max_value=255, dtype=np.uint8):
     # Implement Copy-Paste augmentation https://arxiv.org/abs/2012.07177, labels as nx5 np.array(cls, xyxy)
     n = len(segments)
     if p and n:
         h, w, c = im.shape  # height, width, channels
-        im_new = np.zeros(im.shape, np.uint8)
+        im_new = np.zeros(im.shape, dtype)
         for j in random.sample(range(n), k=round(p * n)):
             l, s = labels[j], segments[j]
             box = w - l[3], l[2], w - l[1], l[4]
@@ -223,7 +233,7 @@ def copy_paste(im, labels, segments, p=0.5):
             if (ioa < 0.30).all():  # allow 30% obscuration of existing labels
                 labels = np.concatenate((labels, [[l[0], *box]]), 0)
                 segments.append(np.concatenate((w - s[:, 0:1], s[:, 1:2]), 1))
-                cv2.drawContours(im_new, [segments[j].astype(np.int32)], -1, (255, 255, 255), cv2.FILLED)
+                cv2.drawContours(im_new, [segments[j].astype(np.int)], -1, (max_value, max_value, max_value), cv2.FILLED)
 
         result = cv2.bitwise_and(src1=im, src2=im_new)
         result = cv2.flip(result, 1)  # augment segments (flip left-right)
@@ -261,10 +271,10 @@ def cutout(im, labels, p=0.5):
     return labels
 
 
-def mixup(im, labels, im2, labels2):
+def mixup(im, labels, im2, labels2, dtype=np.uint8):
     # Applies MixUp augmentation https://arxiv.org/pdf/1710.09412.pdf
     r = np.random.beta(32.0, 32.0)  # mixup ratio, alpha=beta=32.0
-    im = (im * r + im2 * (1 - r)).astype(np.uint8)
+    im = (im * r + im2 * (1 - r)).astype(dtype)
     labels = np.concatenate((labels, labels2), 0)
     return im, labels
 
