@@ -25,22 +25,32 @@ def preprocess(load_file, save_file):
         else:
             pretrained[lr].append(mAP)
 
-    def plot(data):
+    def raw2df(data, name):
         x = np.asarray(list((data.keys())))
         y = np.asarray([list(scores) for scores in data.values()])
-        df = {x[i]:y[i] for i in range(len(x))}
-        df = pd.DataFrame.from_dict(df)
-        sns.boxplot(data=df)
+        x = np.repeat(x, y.shape[1], axis=0)
+        y = y.flatten()
+        df = {"Learning Rate": x, "mAP": y}
+        df = pd.DataFrame(data=df).assign(Initialization=name)
+        return df
 
-    plot(scratch)
-    plot(pretrained)
 
-    plt.show()
+    scratch = raw2df(scratch, "Scratch")
+    pretrained = raw2df(pretrained, "Pretrained")
 
+    df = pd.concat([scratch, pretrained])
+
+    sns.boxplot(x="Learning Rate", y="mAP", hue="Initialization", data=df)
+
+    plt.ylim(0, 1)
+
+    # plt.show()
+    plt.savefig(save_file, dpi=200)
 
 
 if __name__ == "__main__":
-    load_dir = "/home/k539i/Documents/syncthing-DKFZ/evaluation/yolov5/Node21/preprocessed/Scratch vs Pretrained/Scratch vs Pretrained.csv"
-    save_dir = "/home/k539i/Documents/syncthing-DKFZ/evaluation/yolov5/Node21/plots/Scratch vs Pretrained/"
+    load_dir = "D:/syncthing-DKFZ/evaluation/yolov5/Node21/preprocessed/"
+    save_dir = "D:/syncthing-DKFZ/evaluation/yolov5/Node21/plots/"
+    name = "Scratch vs Pretrained.csv"
 
-    preprocess(load_dir, save_dir)
+    preprocess(join(load_dir, name), join(save_dir, name)[:-4] + ".png")
