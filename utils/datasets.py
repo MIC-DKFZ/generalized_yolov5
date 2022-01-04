@@ -21,7 +21,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 import yaml
-# from PIL import ExifTags, Image, ImageOps
+from PIL import ExifTags, Image, ImageOps
 from torch.utils.data import DataLoader, Dataset, dataloader, distributed
 from tqdm import tqdm
 
@@ -29,20 +29,18 @@ from utils.augmentations import Albumentations, augment_hsv, copy_paste, letterb
 from utils.general import (LOGGER, check_dataset, check_requirements, check_yaml, clean_str, segments2boxes, xyn2xy,
                            xywh2xyxy, xywhn2xyxy, xyxy2xywhn)
 from utils.torch_utils import torch_distributed_zero_first
-from medpy.io import load, save
-import SimpleITK as sitk
 
 # Parameters
 HELP_URL = 'https://github.com/ultralytics/yolov5/wiki/Train-Custom-Data'
-IMG_FORMATS = ['mha', 'dcm']  # acceptable image suffixes
+IMG_FORMATS = ['bmp', 'jpg', 'jpeg', 'png', 'tif', 'tiff', 'dng', 'webp', 'mpo']  # acceptable image suffixes
 VID_FORMATS = ['mov', 'avi', 'mp4', 'mpg', 'mpeg', 'm4v', 'wmv', 'mkv']  # acceptable video suffixes
 WORLD_SIZE = int(os.getenv('WORLD_SIZE', 1))  # DPP
 NUM_THREADS = min(8, max(1, os.cpu_count() - 1))  # number of multiprocessing threads
 
 # Get orientation exif tag
-# for orientation in ExifTags.TAGS.keys():
-#     if ExifTags.TAGS[orientation] == 'Orientation':
-#         break
+for orientation in ExifTags.TAGS.keys():
+    if ExifTags.TAGS[orientation] == 'Orientation':
+        break
 
 
 def get_hash(paths):
@@ -53,45 +51,20 @@ def get_hash(paths):
     return h.hexdigest()  # return hash
 
 
-# def exif_size(img):
-#     # Returns exif-corrected PIL size
-#     s = img.size  # (width, height)
-#     try:
-#         rotation = dict(img._getexif().items())[orientation]
-#         if rotation == 6:  # rotation 270
-#             s = (s[1], s[0])
-#         elif rotation == 8:  # rotation 90
-#             s = (s[1], s[0])
-#     except:
-#         pass
-#
-#     return s
+def exif_size(img):
+    # Returns exif-corrected PIL size
+    s = img.size  # (width, height)
+    try:
+        rotation = dict(img._getexif().items())[orientation]
+        if rotation == 6:  # rotation 270
+            s = (s[1], s[0])
+        elif rotation == 8:  # rotation 90
+            s = (s[1], s[0])
+    except:
+        pass
 
+    return s
 
-# def exif_transpose(image):
-#     """
-#     Transpose a PIL image accordingly if it has an EXIF Orientation tag.
-#     Inplace version of https://github.com/python-pillow/Pillow/blob/master/src/PIL/ImageOps.py exif_transpose()
-#
-#     :param image: The image to transpose.
-#     :return: An image.
-#     """
-#     exif = image.getexif()
-#     orientation = exif.get(0x0112, 1)  # default 1
-#     if orientation > 1:
-#         method = {2: Image.FLIP_LEFT_RIGHT,
-#                   3: Image.ROTATE_180,
-#                   4: Image.FLIP_TOP_BOTTOM,
-#                   5: Image.TRANSPOSE,
-#                   6: Image.ROTATE_270,
-#                   7: Image.TRANSVERSE,
-#                   8: Image.ROTATE_90,
-#                   }.get(orientation)
-#         if method is not None:
-#             image = image.transpose(method)
-#             del exif[0x0112]
-#             image.info["exif"] = exif.tobytes()
-#     return image
 
 def exif_transpose(image):
     """
@@ -101,6 +74,21 @@ def exif_transpose(image):
     :param image: The image to transpose.
     :return: An image.
     """
+    exif = image.getexif()
+    orientation = exif.get(0x0112, 1)  # default 1
+    if orientation > 1:
+        method = {2: Image.FLIP_LEFT_RIGHT,
+                  3: Image.ROTATE_180,
+                  4: Image.FLIP_TOP_BOTTOM,
+                  5: Image.TRANSPOSE,
+                  6: Image.ROTATE_270,
+                  7: Image.TRANSVERSE,
+                  8: Image.ROTATE_90,
+                  }.get(orientation)
+        if method is not None:
+            image = image.transpose(method)
+            del exif[0x0112]
+            image.info["exif"] = exif.tobytes()
     return image
 
 
@@ -402,12 +390,6 @@ class LoadImagesAndLabels(Dataset):
         self.stride = stride
         self.path = path
         self.albumentations = Albumentations() if augment else None
-        self.img_fill_value = hyp["img_fill_value"]
-        self.img_dtype = np.dtype(hyp["img_dtype"])
-        self.max_value = hyp["max_value"]
-        self.mean = hyp["mean"]
-        self.std = hyp["std"]
-        self.channels = hyp["channels"]
 
         try:
             f = []  # image files
@@ -442,12 +424,6 @@ class LoadImagesAndLabels(Dataset):
 
         # Display cache
         nf, nm, ne, nc, n = cache.pop('results')  # found, missing, empty, corrupted, total
-
-        # Fix from Karol: Remove channel dim from shape entry stored in every tuple
-        for key in cache.keys():
-            if key not in ["hash", "msgs", "version"]:
-                cache[key] = [cache[key][0], cache[key][1][:2], cache[key][2]]
-
         if exists:
             d = f"Scanning '{cache_path}' images and labels... {nf} found, {nm} missing, {ne} empty, {nc} corrupted"
             tqdm(None, desc=prefix + d, total=n, initial=n)  # display cache results
@@ -516,7 +492,7 @@ class LoadImagesAndLabels(Dataset):
                 self.im_cache_dir.mkdir(parents=True, exist_ok=True)
             gb = 0  # Gigabytes of cached images
             self.img_hw0, self.img_hw = [None] * n, [None] * n
-            results = ThreadPool(NUM_THREADS).imap(lambda x: load_image(*x, self.img_dtype, self.channels), zip(repeat(self), range(n)))
+            results = ThreadPool(NUM_THREADS).imap(lambda x: load_image(*x), zip(repeat(self), range(n)))
             pbar = tqdm(enumerate(results), total=n)
             for i, x in pbar:
                 if cache_images == 'disk':
@@ -581,15 +557,16 @@ class LoadImagesAndLabels(Dataset):
         mosaic = self.mosaic and random.random() < hyp['mosaic']
         if mosaic:
             # Load mosaic
-            img, labels = load_mosaic(self, index, img_fill_value=self.img_fill_value, max_value=self.max_value, dtype=self.img_dtype, channels=self.channels)
+            img, labels = load_mosaic(self, index)
             shapes = None
 
             # MixUp augmentation
             if random.random() < hyp['mixup']:
-                img, labels = mixup(img, labels, *load_mosaic(self, random.randint(0, self.n - 1), img_fill_value=self.img_fill_value, max_value=self.max_value, dtype=self.img_dtype, channels=self.channels), dtype=self.img_dtype)
+                img, labels = mixup(img, labels, *load_mosaic(self, random.randint(0, self.n - 1)))
+
         else:
             # Load image
-            img, (h0, w0), (h, w) = load_image(self, index, self.img_dtype, self.channels)
+            img, (h0, w0), (h, w) = load_image(self, index)
 
             # Letterbox
             shape = self.batch_shapes[self.batch[index]] if self.rect else self.img_size  # final letterboxed shape
@@ -599,7 +576,6 @@ class LoadImagesAndLabels(Dataset):
             labels = self.labels[index].copy()
             if labels.size:  # normalized xywh to pixel xyxy format
                 labels[:, 1:] = xywhn2xyxy(labels[:, 1:], ratio[0] * w, ratio[1] * h, padw=pad[0], padh=pad[1])
-
 
             if self.augment:
                 img, labels = random_perspective(img, labels,
@@ -619,8 +595,7 @@ class LoadImagesAndLabels(Dataset):
             nl = len(labels)  # update after albumentations
 
             # HSV color-space
-            # Note Karol-G: Not possible for non-natural images
-            # augment_hsv(img, hgain=hyp['hsv_h'], sgain=hyp['hsv_s'], vgain=hyp['hsv_v'])
+            augment_hsv(img, hgain=hyp['hsv_h'], sgain=hyp['hsv_s'], vgain=hyp['hsv_v'])
 
             # Flip up-down
             if random.random() < hyp['flipud']:
@@ -641,16 +616,9 @@ class LoadImagesAndLabels(Dataset):
         if nl:
             labels_out[:, 1:] = torch.from_numpy(labels)
 
-        if hyp["standardize"]:
-            img = img.astype(np.float32)
-            img = (img - self.mean) / self.std
-
         # Convert
         img = img.transpose((2, 0, 1))[::-1]  # HWC to CHW, BGR to RGB
         img = np.ascontiguousarray(img)
-
-        if img.shape[0] == 1:
-            img = img.copy()
 
         return torch.from_numpy(img), labels_out, self.img_files[index], shapes
 
@@ -689,27 +657,7 @@ class LoadImagesAndLabels(Dataset):
 
 
 # Ancillary functions --------------------------------------------------------------------------------------------------
-# def load_image(self, i):
-#     # loads 1 image from dataset index 'i', returns im, original hw, resized hw
-#     im = self.imgs[i]
-#     if im is None:  # not cached in ram
-#         npy = self.img_npy[i]
-#         if npy and npy.exists():  # load npy
-#             im = np.load(npy)
-#         else:  # read image
-#             path = self.img_files[i]
-#             im = cv2.imread(path)  # BGR
-#             assert im is not None, f'Image Not Found {path}'
-#         h0, w0 = im.shape[:2]  # orig hw
-#         r = self.img_size / max(h0, w0)  # ratio
-#         if r != 1:  # if sizes are not equal
-#             im = cv2.resize(im, (int(w0 * r), int(h0 * r)),
-#                             interpolation=cv2.INTER_AREA if r < 1 and not self.augment else cv2.INTER_LINEAR)
-#         return im, (h0, w0), im.shape[:2]  # im, hw_original, hw_resized
-#     else:
-#         return self.imgs[i], self.img_hw0[i], self.img_hw[i]  # im, hw_original, hw_resized
-
-def load_image(self, i, img_dtype, channels):
+def load_image(self, i):
     # loads 1 image from dataset index 'i', returns im, original hw, resized hw
     im = self.imgs[i]
     if im is None:  # not cached in ram
@@ -718,74 +666,19 @@ def load_image(self, i, img_dtype, channels):
             im = np.load(npy)
         else:  # read image
             path = self.img_files[i]
-            # im = cv2.imread(path)  # BGR
-            # im, im_header = load(path)
-            # im = sitk.GetArrayFromImage(sitk.ReadImage(path))
-            # im = im.transpose((2, 1, 0))
-            im = _load_image(path)
-            im = im.squeeze()
-            # im = np.rot90(im, k=-1)
-            # im = np.fliplr(im)
-            im = im.astype(img_dtype)
-            # im = (normalize(im) * 255).astype(np.int)
-            # im = im[..., np.newaxis]
-            im = np.stack((im,) * channels, axis=-1)
+            im = cv2.imread(path)  # BGR
             assert im is not None, f'Image Not Found {path}'
         h0, w0 = im.shape[:2]  # orig hw
         r = self.img_size / max(h0, w0)  # ratio
         if r != 1:  # if sizes are not equal
-            im = cv2.resize(im, (int(w0 * r), int(h0 * r)), interpolation=cv2.INTER_AREA if r < 1 and not self.augment else cv2.INTER_LINEAR)
-            if len(im.shape) == 2:
-                im = np.stack((im,) * channels, axis=-1)
-        im = im.astype(img_dtype)
-        # label = self.labels[i]
-        # if label.shape[0] == 1:
-        #     x = int(label[0][1] * 1024)
-        #     y = int(label[0][2] * 1024)
-        #     width = int(label[0][3] * 1024)
-        #     height = int(label[0][4] * 1024)
-        #     cv2.rectangle(im, (x, y), (x + width, y + height), (255, 0, 0), thickness=2)
-        #     print("")
+            im = cv2.resize(im, (int(w0 * r), int(h0 * r)),
+                            interpolation=cv2.INTER_AREA if r < 1 and not self.augment else cv2.INTER_LINEAR)
         return im, (h0, w0), im.shape[:2]  # im, hw_original, hw_resized
     else:
         return self.imgs[i], self.img_hw0[i], self.img_hw[i]  # im, hw_original, hw_resized
 
 
-def _load_image(path):
-    im = sitk.GetArrayFromImage(sitk.ReadImage(path))
-    # im = im.transpose((2, 1, 0))
-
-    # im, im_header = load(path)
-    # im = np.rot90(im, k=-1)
-    # im = np.fliplr(im)
-    return im
-
-
-def _save_image(im, filename, compress=False):
-    im = sitk.GetImageFromArray((im))
-    sitk.WriteImage(im, filename, useCompression=compress)
-
-    # save(im, filename, use_compression=compress)
-
-
-def standardize(image, mean=2298, std=1029):
-    return (image - mean) / std
-
-
-def normalize(x, x_min=None, x_max=None):
-    if x_min is None:
-        x_min = x.min()
-
-    if x_max is None:
-        x_max = x.max()
-
-    if x_min == x_max:
-        return x * 0
-    else:
-        return (x - x.min()) / (x.max() - x.min())
-
-
-def load_mosaic(self, index, img_fill_value=114, max_value=255, dtype=np.uint8, channels=3):
+def load_mosaic(self, index):
     # YOLOv5 4-mosaic loader. Loads 1 image + 3 random images into a 4-image mosaic
     labels4, segments4 = [], []
     s = self.img_size
@@ -794,11 +687,11 @@ def load_mosaic(self, index, img_fill_value=114, max_value=255, dtype=np.uint8, 
     random.shuffle(indices)
     for i, index in enumerate(indices):
         # Load image
-        img, _, (h, w) = load_image(self, index, self.img_dtype, channels)
+        img, _, (h, w) = load_image(self, index)
 
         # place img in img4
         if i == 0:  # top left
-            img4 = np.full((s * 2, s * 2, img.shape[2]), img_fill_value, dtype=dtype)  # base image with 4 tiles
+            img4 = np.full((s * 2, s * 2, img.shape[2]), 114, dtype=np.uint8)  # base image with 4 tiles
             x1a, y1a, x2a, y2a = max(xc - w, 0), max(yc - h, 0), xc, yc  # xmin, ymin, xmax, ymax (large image)
             x1b, y1b, x2b, y2b = w - (x2a - x1a), h - (y2a - y1a), w, h  # xmin, ymin, xmax, ymax (small image)
         elif i == 1:  # top right
@@ -830,20 +723,19 @@ def load_mosaic(self, index, img_fill_value=114, max_value=255, dtype=np.uint8, 
     # img4, labels4 = replicate(img4, labels4)  # replicate
 
     # Augment
-    img4, labels4, segments4 = copy_paste(img4, labels4, segments4, p=self.hyp['copy_paste'], max_value=max_value, dtype=dtype)
+    img4, labels4, segments4 = copy_paste(img4, labels4, segments4, p=self.hyp['copy_paste'])
     img4, labels4 = random_perspective(img4, labels4, segments4,
                                        degrees=self.hyp['degrees'],
                                        translate=self.hyp['translate'],
                                        scale=self.hyp['scale'],
                                        shear=self.hyp['shear'],
                                        perspective=self.hyp['perspective'],
-                                       border=self.mosaic_border,
-                                       bordervalue=img_fill_value)  # border to remove
+                                       border=self.mosaic_border)  # border to remove
 
     return img4, labels4
 
 
-def load_mosaic9(self, index, channels):
+def load_mosaic9(self, index):
     # YOLOv5 9-mosaic loader. Loads 1 image + 8 random images into a 9-image mosaic
     labels9, segments9 = [], []
     s = self.img_size
@@ -851,7 +743,7 @@ def load_mosaic9(self, index, channels):
     random.shuffle(indices)
     for i, index in enumerate(indices):
         # Load image
-        img, _, (h, w) = load_image(self, index, self.img_dtype, channels)
+        img, _, (h, w) = load_image(self, index)
 
         # place img in img9
         if i == 0:  # center
@@ -996,23 +888,17 @@ def verify_image_label(args):
     nm, nf, ne, nc, msg, segments = 0, 0, 0, 0, '', []  # number (missing, found, empty, corrupt), message, segments
     try:
         # verify images
-        # im = Image.open(im_file)
-        # im.verify()  # PIL verify
-        # im, im_header = load(im_file)
-        # im = sitk.GetArrayFromImage(sitk.ReadImage(im_file))
-        im = _load_image(im_file)
-        # im = im[..., np.newaxis]
-        im = np.stack((im,) * 3, axis=-1)
-        # shape = exif_size(im)  # image size
-        shape = im.shape[:2]
+        im = Image.open(im_file)
+        im.verify()  # PIL verify
+        shape = exif_size(im)  # image size
         assert (shape[0] > 9) & (shape[1] > 9), f'image size {shape} <10 pixels'
-        # assert im.format.lower() in IMG_FORMATS, f'invalid image format {im.format}'
-        # if im.format.lower() in ('jpg', 'jpeg'):
-        #     with open(im_file, 'rb') as f:
-        #         f.seek(-2, 2)
-        #         if f.read() != b'\xff\xd9':  # corrupt JPEG
-        #             ImageOps.exif_transpose(Image.open(im_file)).save(im_file, 'JPEG', subsampling=0, quality=100)
-        #             msg = f'{prefix}WARNING: {im_file}: corrupt JPEG restored and saved'
+        assert im.format.lower() in IMG_FORMATS, f'invalid image format {im.format}'
+        if im.format.lower() in ('jpg', 'jpeg'):
+            with open(im_file, 'rb') as f:
+                f.seek(-2, 2)
+                if f.read() != b'\xff\xd9':  # corrupt JPEG
+                    ImageOps.exif_transpose(Image.open(im_file)).save(im_file, 'JPEG', subsampling=0, quality=100)
+                    msg = f'{prefix}WARNING: {im_file}: corrupt JPEG restored and saved'
 
         # verify labels
         if os.path.isfile(lb_file):
@@ -1077,28 +963,18 @@ def dataset_stats(path='coco128.yaml', autodownload=False, verbose=False, profil
         # HUB ops for 1 image 'f': resize and save at reduced quality in /dataset-hub for web/app viewing
         f_new = im_dir / Path(f).name  # dataset-hub image filename
         try:  # use PIL
-            # im = Image.open(f)
-            # im, im_header = load(f)
-            # im = sitk.GetArrayFromImage(sitk.ReadImage(f))
-            im = _load_image(f)
-            # im = im[..., np.newaxis]
-            im = np.stack((im,) * 3, axis=-1)
+            im = Image.open(f)
             r = max_dim / max(im.height, im.width)  # ratio
             if r < 1.0:  # image too large
                 im = im.resize((int(im.width * r), int(im.height * r)))
-            # im.save(f_new, quality=75)  # save
-            # save(f_new, use_compression=True)
-            _save_image(f_new, compress=True)
+            im.save(f_new, 'JPEG', quality=75, optimize=True)  # save
         except Exception as e:  # use OpenCV
             print(f'WARNING: HUB ops PIL failure {f}: {e}')
             im = cv2.imread(f)
             im_height, im_width = im.shape[:2]
             r = max_dim / max(im_height, im_width)  # ratio
             if r < 1.0:  # image too large
-                channels = im.shape[2]
                 im = cv2.resize(im, (int(im_width * r), int(im_height * r)), interpolation=cv2.INTER_LINEAR)
-                if len(im.shape) == 2:
-                    im = np.stack((im,) * channels, axis=-1)
             cv2.imwrite(str(f_new), im)
 
     zipped, data_dir, yaml_path = unzip(Path(path))
