@@ -23,7 +23,7 @@ def convert_dataset(config_path):
     train_positive_set, train_negative_set, test_positive_set, test_negative_set, labels = preprocess_csv(config)
     preprocess_images_train(config, fold_paths, train_positive_set, train_negative_set)
     if "train_test_split" in config:
-        preprocess_images_test(config, fold_paths, test_positive_set, test_negative_set)
+        preprocess_images_test(config, join(config["save_dir"], "test"), test_positive_set, test_negative_set)
     generate_yolo_config(config, labels)
 
 
@@ -34,6 +34,10 @@ def prepare_folder_structure(config):
     save_dir = config["save_dir"]
     if "train_test_split" in config:
         save_dir = join(config["save_dir"], "train")
+        img_fold_save_dir = join(config["save_dir"], "test", "images")
+        label_fold_save_dir = join(config["save_dir"], "test", "labels")
+        Path(img_fold_save_dir).mkdir(parents=True, exist_ok=True)
+        Path(label_fold_save_dir).mkdir(parents=True, exist_ok=True)
 
     fold_paths = []
     for fold in range(config["cv_folds"]):
@@ -72,7 +76,10 @@ def preprocess_csv(config):
             negative_set.append(name)
 
     if "train_test_split" in config:
+        positive_set = list(positive_set.items())
         train_positive_set, test_positive_set = train_test_split(positive_set, train_size=config["train_test_split"], shuffle=True)
+        train_positive_set = {key: value for key, value in train_positive_set}
+        test_positive_set = {key: value for key, value in test_positive_set}
         train_negative_set, test_negative_set = train_test_split(negative_set, train_size=config["train_test_split"], shuffle=True)
         return train_positive_set, train_negative_set, test_positive_set, test_negative_set, labels
     else:
@@ -102,18 +109,15 @@ def preprocess_images_test(config, save_dir, positive_set, negative_set):
     print("Preprocessing dataset...")
 
     print("1/2 Processing positive labeled data...")
-    for i, fold in enumerate(tqdm(positive_set.keys())):
-        for name in fold:
-            copy_img(join(config["img_load_dir"], name), join(save_dir, "images", name), config["convert2natural_img"])
-            with open(join(save_dir, "labels", name[:-4] + ".txt"), 'w') as f:
-                for entry in positive_set[name]:
-                    f.write("{} {} {} {} {} \n".format(entry["label"], entry["x"], entry["y"], entry["width"], entry["height"]))
+    for i, name in enumerate(tqdm(positive_set.keys())):
+        copy_img(join(config["img_load_dir"], name), join(save_dir, "images", name), config["convert2natural_img"])
+        with open(join(save_dir, "labels", name[:-4] + ".txt"), 'w') as f:
+            for entry in positive_set[name]:
+                f.write("{} {} {} {} {} \n".format(entry["label"], entry["x"], entry["y"], entry["width"], entry["height"]))
 
     print("2/2 Processing negative labeled data...")
-    keys = split_dataset(negative_set, config["cv_folds"])
-    for i, fold in enumerate(tqdm(keys)):
-        for name in fold:
-            copy_img(join(config["img_load_dir"], name), join(save_dir, "images", name), config["convert2natural_img"])
+    for i, name in enumerate(tqdm(negative_set)):
+        copy_img(join(config["img_load_dir"], name), join(save_dir, "images", name), config["convert2natural_img"])
 
 
 def generate_yolo_config(config, labels):
