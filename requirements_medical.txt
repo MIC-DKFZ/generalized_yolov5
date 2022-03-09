@@ -17,6 +17,7 @@ medpy
 pydicom
 imagesize
 scikit-learn
+wandb
 
 # Logging -------------------------------------
 tensorboard>=2.4.1
