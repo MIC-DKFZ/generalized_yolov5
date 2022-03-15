@@ -40,6 +40,25 @@
    </a>
 </div>
 
+# Generalized-YOLOv5
+
+Generalized-YOLOv5 is a modified version of YOLOv5.
+Two main contributions have been made to Generalized-YOLOv5. First, an extension to train on medical images and second a cross-validation extension.
+
+### Medical YOLOv5
+The medical extension enables YOLOv5 to handle images with arbitrary intensity scales, so it can be trained on 2D medical images.
+Furthermore, this extension also includes preprocessing scripts to convert medical datasets to a natural intensity scale.
+Training on natural images is faster as OpenCV, which is highly optimized on natural images, can be used during training for preprocessing and augmentation.
+However, this can lead in some scenarios to a decreased performance as the intensity scale is often reduced to a fraction of its original scale.
+The slow-down on medical images can be somewhat mitigated by increasing worker threads (until they block each other), but one should expect an increased training time of 1.5x.
+
+### N-fold cross-validation
+The cross-validation extension is a dataset preprocessing script that processes a dataset into N folds with corresponding dataset configuration files that are understood by YOLOv5.
+On each fold a YOLOv5 model can be trained and YOLOv5's built-in ensembling method can be used to run inference with the models of all folds.
+The built-in ensembling method itself has no cross-validation functionality and was only designed for ad-hoc ensembling of YOLOv5 models of different scales, thus the preprocessing script is required for cross-validation.
+
+## YOLOv5
+
 <br>
 <p>
 YOLOv5 🚀 is a family of object detection architectures and models pretrained on the COCO dataset, and represents <a href="https://ultralytics.com">Ultralytics</a>
@@ -68,9 +87,9 @@ See the [YOLOv5 Docs](https://docs.ultralytics.com) for full documentation on tr
 <!-- $ sudo apt update && apt install -y libgl1-mesa-glx libsm6 libxext6 libxrender-dev -->
 
 ```bash
-$ git clone https://github.com/ultralytics/yolov5
+$ git clone https://gitlab.hzdr.de/hi-dkfz/applied-computer-vision-lab/introductory_projects/yolov5.git
 $ cd yolov5
-$ pip install -r requirements.txt
+$ pip install -r requirements_medical.txt
 ```
 
 </details>
