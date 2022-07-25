@@ -4,9 +4,6 @@
   <img src="logo.png" >
 </p>
 
-
-# Generalized-YOLOv5
-
 Generalized-YOLOv5 is a modified version of YOLOv5.
 Two main contributions have been made to Generalized-YOLOv5. First, an extension to train on non-natural images and second a cross-validation extension.
 
