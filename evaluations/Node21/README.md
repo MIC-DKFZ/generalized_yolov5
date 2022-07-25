@@ -1,14 +1,14 @@
 # Experiments on the Node21 dataset with YOLOv5
 
 This repository contains a modified YOLOv5 version that has been evaluated with multiple different settings on the Node21 dataset.
-Two main contributions have been made to YOLOv5. First, an extension to train on medical images and second a cross-validation extension.
+Two main contributions have been made to YOLOv5. First, an extension to train on non-natural images and second a cross-validation extension.
 
-### Medical YOLOv5
-The medical extension enables YOLOv5 to handle images with arbitrary intensity scales, so it can be trained on 2D medical images.
-Furthermore, this extension also includes preprocessing scripts to convert medical datasets to a natural intensity scale.
+### Non-Natural image extension
+The non-natural image extension enables YOLOv5 to handle images with arbitrary intensity scales, so it can be trained on 2D non-natural images.
+Furthermore, this extension also includes preprocessing scripts to convert non-natural image datasets to a natural intensity scale.
 Training on natural images is faster as OpenCV, which is highly optimized on natural images, can be used during training for preprocessing and augmentation.
 However, this can lead in some scenarios to a decreased performance as the intensity scale is often reduced to a fraction of its original scale.
-The slow-down on medical images can be somewhat mitigated by increasing worker threads (until they block each other), but one should expect an increased training time of 1.5x.
+The slow-down on non-natural images can be somewhat mitigated by increasing worker threads (until they block each other), but one should expect an increased training time of 1.5x.
 
 ### N-fold cross-validation
 The cross-validation extension is a dataset preprocessing script that processes a dataset into N folds with corresponding dataset configuration files that are understood by YOLOv5.
@@ -18,11 +18,11 @@ The built-in ensembling method itself has no cross-validation functionality and 
 
 ## Requirements
 
-Install all requirements for YOLOv5 and the medical preprocessing.
+Install all requirements for YOLOv5 and the non-natural preprocessing.
 
 1. Go to https://pytorch.org/get-started/locally/ and install pytorch
 2. Navigate to the detection directory: `cd detection`
-3. Install requirements: `pip install -r yolov5/requirements_medical.txt`
+3. Install requirements: `pip install -r yolov5/requirements_non_natural.txt`
 
 ## Dataset preparation
 
@@ -46,7 +46,7 @@ The folder structure should look like this:
 
 ### Dataset preprocessing
 
-Next we want to preprocess the dataset and bring it into YOLOv5 format, while keeping the medical intensity scale. Optionally we can convert the dataset into the natural image scale of [0,255] as well.
+Next we want to preprocess the dataset and bring it into YOLOv5 format, while keeping the non-natural image intensity scale. Optionally we can convert the dataset into the natural image scale of [0,255] as well.
 
 - Navigate to the detection directory: `cd detection`
 - Adjust the parameters `metadata_path`, `img_load_dir`, `save_dir` and `cv_folds` in `datasets/Node21/dataset_conversion/yolov5_convert_config_medical.yaml`
@@ -55,7 +55,7 @@ Next we want to preprocess the dataset and bring it into YOLOv5 format, while ke
   - `save_dir`: Absolute path to the target folder
   - `cv_folds`: Number of folds for the cross-validation
 - (Optional): Do the same for `datasets/Node21/dataset_conversion/yolov5_convert_config_natural.yaml` too
-- Preprocess the dataset, while keeping medical intensity scale: `python yolov5/data/preprocess/dataset_preprocess.py -c datasets/Node21/dataset_conversion/yolov5_convert_config.yaml`
+- Preprocess the dataset, while keeping the non-natural image intensity scale: `python yolov5/data/preprocess/dataset_preprocess.py -c datasets/Node21/dataset_conversion/yolov5_convert_config.yaml`
 - (Optional): Preprocess the dataset, while converting to natural intensity scale: `python yolov5/data/preprocess/dataset_preprocess.py -c datasets/Node21/dataset_conversion/yolov5_convert_config_255.yaml`
 
 
@@ -125,7 +125,7 @@ The following evaluations have been performed on the Node21 dataset:
 - Impact of different model scales
 - Impact of different batch sizes
 - Impact of different image sizes
-- Training with natural intensity scale vs training with medical intensity scale
+- Training with natural intensity scale vs training with non-natural intensity scale
 - Standardizing the dataset vs not-standardizing the dataset
 - YOLOv5 arch P5 vs P6
 - Final configuration evaluation with train/val and 5F-CV training
@@ -143,7 +143,7 @@ The default configuration is:
 - Dataset split: Train/Val
 
 A single model training with natural images and default configuration takes about 8 hours on an NVIDIA GeForce RTX 2080 Ti and has a gpu memory consumption of 6.4 GB. 
-When training with medical images and otherwise the same setting training takes about 12 hours. Further, we run every configuration/experiment three times.
+When training with non-natural images and otherwise the same setting training takes about 12 hours. Further, we run every configuration/experiment three times.
 
 The number of experiments we can perform for every evaluation is therefore limited.
 
@@ -205,7 +205,7 @@ Figure 4 shows the general development in terms of mAP performance during traini
 In Figure 5 these runs have been grouped to scratch and pretrained. It can be seen that throughout the training pretrained models perform considerably better than models trained from scratch.
 Figure 6 further confirms this with the final mAP scores for each run.
 Here, the best pretrained run has the learning rate of 0.001 and a mAP of 0.56, while the best scratch run has a learning rate of  0.005 and a mAP of 0.45.
-This is a difference of 0.11 mAP and shows that it is highly benefitial to use pretrained models, even though the natural MS COCO dataset is very different to the medical Node21 dataset.
+This is a difference of 0.11 mAP and shows that it is highly benefitial to use pretrained models, even though the natural MS COCO dataset is very different to the non-natural Node21 dataset.
 
 #### Figure 4: Scratch vs Pretrained - runs
 <div align="center">
@@ -287,27 +287,27 @@ This is further confirmed in the final results depicted in Figure 12. Here, we s
   <img src="experiments/box_plots/scaled/Image_Size.png" width=60% height=60%>
 </div>
 
-### Natural vs Medical
+### Natural vs Non-Natural
 In this section we test the impact of training on images with arbitrary intensities. The images of the Node21 dataset have an intensity range of [0, 4095].
 By, contrast natural images have only an intensity range of [0, 255]. 
 It can be argued that a model that can learn from the full intensity range should perform better than one that can learn only from a fraction of it.
 
-For fairness, we do not only compare the natural and the medical intensity scales in this section but also make the comparisons with different learning rates.
-A learning rate that works well for the natural intensity scale does not necessarily also work well for the medical scale.
+For fairness, we do not only compare the natural and the non-natural intensity scales in this section but also make the comparisons with different learning rates.
+A learning rate that works well for the natural intensity scale does not necessarily also work well for the non-natural scale.
 Therefore, we perform each experiment with multiple learning rates.
 
 In Figure 14 the general development in terms of mAP performance during training for each run over multiple learning rates is shown. 
-Figure 15 depicts the same runs grouped by natural and medical intensity scale.
+Figure 15 depicts the same runs grouped by natural and non-natural intensity scale.
 Both groups have a high variance throughout training, which is to be expected as every run uses a different learning rate.
-This confirms the conclusions from the learning rate evaluation, that the learning rate has a significant impact, also for the medical intensity scale.
+This confirms the conclusions from the learning rate evaluation, that the learning rate has a significant impact, also for the non-natural intensity scale.
 This is to be expected, but still worth to note.
 
 In Figure 16 the final mAP results are shown. 
 The models trained on images with natural intensity scale achieve a median mAP score of 0.519, 
-while the models trained on images with medical intensity scale achieve a median mAP of 0.554. This is an improvement of 0.034.
-However, when comparing the best natural model with a mAP score of 0.5797 and the best medical model with a mAP score of 0.5793, than both models perform equally well.
-This is surprising as even though medical models generally perform better than natural ones over multiple learning rates, they do not achieve a better maximum mAP performance.
-It can be concluded that at least for the Node21 dataset, the medical intensity scale has no advantage over the natural intensity scale, when the learning rate has been properly tuned.
+while the models trained on images with non-natural intensity scale achieve a median mAP of 0.554. This is an improvement of 0.034.
+However, when comparing the best natural model with a mAP score of 0.5797 and the best non-natural model with a mAP score of 0.5793, than both models perform equally well.
+This is surprising as even though non-natural models generally perform better than natural ones over multiple learning rates, they do not achieve a better maximum mAP performance.
+It can be concluded that at least for the Node21 dataset, the non-natural intensity scale has no advantage over the natural intensity scale, when the learning rate has been properly tuned.
 
 #### Figure 14: Intensity scale - runs
 <div align="center">
