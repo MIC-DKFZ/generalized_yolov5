@@ -4,8 +4,6 @@
   <img src="logo.png" >
 </p>
 
-</div>
-
 
 # Generalized-YOLOv5
 
@@ -23,21 +21,6 @@ The slow-down on medical images can be somewhat mitigated by increasing worker t
 The cross-validation extension is a dataset preprocessing script that processes a dataset into N folds with corresponding dataset configuration files that are understood by YOLOv5.
 On each fold a YOLOv5 model can be trained and YOLOv5's built-in ensembling method can be used to run inference with the models of all folds.
 The built-in ensembling method itself has no cross-validation functionality and was only designed for ad-hoc ensembling of YOLOv5 models of different scales, thus the preprocessing script is required for cross-validation.
-
-## YOLOv5
-
-<br>
-<p>
-YOLOv5 🚀 is a family of object detection architectures and models pretrained on the COCO dataset, and represents <a href="https://ultralytics.com">Ultralytics</a>
- open-source research into future vision AI methods, incorporating lessons learned and best practices evolved over thousands of hours of research and development.
-</p>
-
-<!--
-<a align="center" href="https://ultralytics.com/yolov5" target="_blank">
-<img width="800" src="https://github.com/ultralytics/yolov5/releases/download/v1.0/banner-api.png"></a>
--->
-
-</div>
 
 ## <div align="center">Documentation</div>
 
