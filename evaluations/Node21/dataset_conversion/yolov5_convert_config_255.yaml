@@ -1,0 +1,15 @@
+metadata_path: /home/k539i/Documents/datasets/original/node21/proccessed_data/metadata.csv
+img_load_dir: /home/k539i/Documents/datasets/original/node21/proccessed_data/images/
+save_dir: /home/k539i/Documents/datasets/preprocessed/node21_255_5fcv/
+
+key_name: img_name
+key_x: x
+key_y: y
+key_width: width
+key_height: height
+key_label: label
+convert_bb_size: False
+add_extension: False
+convert2natural_img: True
+
+cv_folds: 5
