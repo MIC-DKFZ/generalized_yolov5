@@ -1,76 +1,23 @@
 <div align="center">
-<p>
-   <a align="left" href="https://ultralytics.com/yolov5" target="_blank">
-   <img width="850" src="https://github.com/ultralytics/yolov5/releases/download/v1.0/splash.jpg"></a>
-</p>
-<br>
-<div>
-   <a href="https://github.com/ultralytics/yolov5/actions"><img src="https://github.com/ultralytics/yolov5/workflows/CI%20CPU%20testing/badge.svg" alt="CI CPU testing"></a>
-   <a href="https://zenodo.org/badge/latestdoi/264818686"><img src="https://zenodo.org/badge/264818686.svg" alt="YOLOv5 Citation"></a>
-   <a href="https://hub.docker.com/r/ultralytics/yolov5"><img src="https://img.shields.io/docker/pulls/ultralytics/yolov5?logo=docker" alt="Docker Pulls"></a>
-   <br>
-   <a href="https://colab.research.google.com/github/ultralytics/yolov5/blob/master/tutorial.ipynb"><img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"></a>
-   <a href="https://www.kaggle.com/ultralytics/yolov5"><img src="https://kaggle.com/static/images/open-in-kaggle.svg" alt="Open In Kaggle"></a>
-   <a href="https://join.slack.com/t/ultralytics/shared_invite/zt-w29ei8bp-jczz7QYUmDtgo6r6KcMIAg"><img src="https://img.shields.io/badge/Slack-Join_Forum-blue.svg?logo=slack" alt="Join Forum"></a>
-</div>
-<br>
-<div align="center">
-   <a href="https://github.com/ultralytics">
-   <img src="https://github.com/ultralytics/yolov5/releases/download/v1.0/logo-social-github.png" width="2%"/>
-   </a>
-   <img width="2%" />
-   <a href="https://www.linkedin.com/company/ultralytics">
-   <img src="https://github.com/ultralytics/yolov5/releases/download/v1.0/logo-social-linkedin.png" width="2%"/>
-   </a>
-   <img width="2%" />
-   <a href="https://twitter.com/ultralytics">
-   <img src="https://github.com/ultralytics/yolov5/releases/download/v1.0/logo-social-twitter.png" width="2%"/>
-   </a>
-   <img width="2%" />
-   <a href="https://youtube.com/ultralytics">
-   <img src="https://github.com/ultralytics/yolov5/releases/download/v1.0/logo-social-youtube.png" width="2%"/>
-   </a>
-   <img width="2%" />
-   <a href="https://www.facebook.com/ultralytics">
-   <img src="https://github.com/ultralytics/yolov5/releases/download/v1.0/logo-social-facebook.png" width="2%"/>
-   </a>
-   <img width="2%" />
-   <a href="https://www.instagram.com/ultralytics/">
-   <img src="https://github.com/ultralytics/yolov5/releases/download/v1.0/logo-social-instagram.png" width="2%"/>
-   </a>
-</div>
 
-# Generalized-YOLOv5
+<p align="left">
+  <img src="logo.png" >
+</p>
 
 Generalized-YOLOv5 is a modified version of YOLOv5.
-Two main contributions have been made to Generalized-YOLOv5. First, an extension to train on medical images and second a cross-validation extension.
+Two main contributions have been made to Generalized-YOLOv5. First, an extension to train on non-natural images and second a cross-validation extension.
 
-### Medical YOLOv5
-The medical extension enables YOLOv5 to handle images with arbitrary intensity scales, so it can be trained on 2D medical images.
-Furthermore, this extension also includes preprocessing scripts to convert medical datasets to a natural intensity scale.
+### Non-Natural image extension
+The non-natural image extension enables YOLOv5 to handle images with arbitrary intensity scales, so it can be trained on 2D non-natural images.
+Furthermore, this extension also includes preprocessing scripts to convert non-natural image datasets to a natural intensity scale.
 Training on natural images is faster as OpenCV, which is highly optimized on natural images, can be used during training for preprocessing and augmentation.
 However, this can lead in some scenarios to a decreased performance as the intensity scale is often reduced to a fraction of its original scale.
-The slow-down on medical images can be somewhat mitigated by increasing worker threads (until they block each other), but one should expect an increased training time of 1.5x.
+The slow-down on non-natural images can be somewhat mitigated by increasing worker threads (until they block each other), but one should expect an increased training time of 1.5x.
 
 ### N-fold cross-validation
 The cross-validation extension is a dataset preprocessing script that processes a dataset into N folds with corresponding dataset configuration files that are understood by YOLOv5.
 On each fold a YOLOv5 model can be trained and YOLOv5's built-in ensembling method can be used to run inference with the models of all folds.
 The built-in ensembling method itself has no cross-validation functionality and was only designed for ad-hoc ensembling of YOLOv5 models of different scales, thus the preprocessing script is required for cross-validation.
-
-## YOLOv5
-
-<br>
-<p>
-YOLOv5 🚀 is a family of object detection architectures and models pretrained on the COCO dataset, and represents <a href="https://ultralytics.com">Ultralytics</a>
- open-source research into future vision AI methods, incorporating lessons learned and best practices evolved over thousands of hours of research and development.
-</p>
-
-<!--
-<a align="center" href="https://ultralytics.com/yolov5" target="_blank">
-<img width="800" src="https://github.com/ultralytics/yolov5/releases/download/v1.0/banner-api.png"></a>
--->
-
-</div>
 
 ## <div align="center">Documentation</div>
 
@@ -89,7 +36,7 @@ See the [YOLOv5 Docs](https://docs.ultralytics.com) for full documentation on tr
 ```bash
 $ git clone https://gitlab.hzdr.de/hi-dkfz/applied-computer-vision-lab/introductory_projects/yolov5.git
 $ cd yolov5
-$ pip install -r requirements_medical.txt
+$ pip install -r requirements_non_natural.txt
 ```
 
 </details>
