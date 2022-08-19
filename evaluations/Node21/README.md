@@ -146,9 +146,9 @@ The following experiments have been performed on the Node21 dataset:
 - [Impact of different model scales](#model-scale) 
 - [Impact of different batch sizes](#batch-size) 
 - [Impact of different image sizes](#image-size) 
-- [Training with natural intensity scale vs training with non-natural intensity scale](#natural-vs-non---natural) 
-- [Standardizing the dataset vs not-standardizing the dataset](#standardized-vs-not---standardized) 
-- [YOLOv5 arch P5 vs P6](#arch---p5-vs-arch---p6) 
+- [Training with natural intensity scale vs training with non-natural intensity scale](#natural-vs-non-natural) 
+- [Standardizing the dataset vs not-standardizing the dataset](#standardized-vs-not-standardized) 
+- [YOLOv5 arch P5 vs P6](#arch-p5-vs-arch-p6) 
 - [Final configuration evaluation with train/val and 5F-CV training](#final-configuration) 
 
 For each experiment a default configuration has been used with only the parameter of interest changed. This enables us to observe the impact of different configurations.
