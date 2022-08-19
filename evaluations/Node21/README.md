@@ -8,7 +8,7 @@ The non-natural image extension enables YOLOv5 to handle images with arbitrary i
 Furthermore, this extension also includes preprocessing scripts to convert non-natural image datasets to a natural intensity scale.
 Training on natural images is faster as OpenCV, which is highly optimized on natural images, can be used during training for preprocessing and augmentation.
 However, this can lead in some scenarios to a decreased performance as the intensity scale is often reduced to a fraction of its original scale.
-The slow-down on non-natural images can be somewhat mitigated by increasing worker threads (until they block each other), but one should expect an increased training time of 1.5x.
+The slow-down on non-natural images can be somewhat mitigated by increasing worker threads (until they block each other), but one should expect an increased training time of 1.5x. To use the non-natural extension the non_natural branch of this repository needs to be checked out.
 
 ### N-fold cross-validation
 The cross-validation extension is a dataset preprocessing script that processes a dataset into N folds with corresponding dataset configuration files that are understood by YOLOv5.
@@ -47,21 +47,21 @@ The folder structure should look like this:
 
 Next we want to preprocess the dataset and bring it into YOLOv5 format, while keeping the non-natural image intensity scale. Optionally we can convert the dataset into the natural image scale of [0,255] as well.
 
-- Navigate to the detection directory: `cd detection`
+- Checkout the branch `non_natural` of this repository.
 - Adjust the parameters `metadata_path`, `img_load_dir`, `save_dir` and `cv_folds` in `evaluations/Node21/dataset_conversion/yolov5_convert_config_non_natural.yaml`
   - `metadata_path`: Absolute path to `metadata.csv `
   - `img_load_dir`: Absolute path to `proccessed_data/images`
   - `save_dir`: Absolute path to the target folder
   - `cv_folds`: Number of folds for the cross-validation
-- (Optional): Do the same for `evaluations/Node21/dataset_conversion/yolov5_convert_config_natural.yaml` too
+- (Optional): Do the same for `evaluations/Node21/dataset_conversion/yolov5_convert_config_natural.yaml` too (Checkout the branch `master`)
 - Preprocess the dataset, while keeping the non-natural image intensity scale: `python yolov5/data/preprocess/dataset_preprocess.py -c evaluations/Node21/dataset_conversion/yolov5_convert_config_non_natural.yaml`
-- (Optional): Preprocess the dataset, while converting to natural intensity scale: `python yolov5/data/preprocess/dataset_preprocess.py -c evaluations/Node21/dataset_conversion/yolov5_convert_config_natural.yaml`
+- (Optional): Preprocess the dataset, while converting to natural intensity scale: `python yolov5/data/preprocess/dataset_preprocess.py -c evaluations/Node21/dataset_conversion/yolov5_convert_config_natural.yaml` (Checkout the branch `master`)
 
 
 ## YOLOv5 - Training
 
 Training on the preprocessed Node21 dataset can be started with the train.py. It is important to note that some hyperparameters are set in the run command, while some are set in the hyperparameter configuration file.
-The parameters in the hyperparameter configuration file are usually not changed. Hence, only the parameters that change more frequently are used as arguments when starting the training.
+The parameters in the hyperparameter configuration file are usually not changed. Hence, only the parameters that change more frequently are used as arguments when starting the training. When training an ensemble, every fold has to be trained individually with a new training run.
 
 
 Example command:
@@ -77,7 +77,7 @@ Relevant arguments:
 - img: The used image size. Images are always resized to the same size, so only one value is required.
 - batch: The batch size.
 - patience: The patience of how many epochs training should stop without an improvement. Setting this argument to zero disables the patience.
-- weights: The pretrained weights that should be used for initialization.
+- weights: The pretrained weights that should be used for initialization. They are downloaded automatically in case they are not present. Available weight options are listed [here](https://github.com/ultralytics/yolov5/tree/master/models).
 
 Example hyperparameter configuration file:
 
@@ -135,7 +135,9 @@ channels: 3  # number of image channels (Three is best even if it is just one, d
 When training in the non-natural intensity scale with enabled standardization then the standardization parameters in the non-natural section of the config should be recomputed on the dataset.
 However, the experiments will show that standardization is not required and can be deactivated during training.
 
-In order to optimize the performance of a model if desired, the augmentation parameters are a good starting point.
+### Logging
+
+YOLOv5 uses wandb for logging. No account is required and the logs can be viewed over the link that is shown at the beginning of the training. It is possible that wandb asks for a username and password in a prompt when starting the training. This can safely be ignored and the prompt is skipped automatically after a few seconds.
 
 ## Experiments
 
@@ -153,6 +155,7 @@ The following experiments have been performed on the Node21 dataset:
 
 For each experiment a default configuration has been used with only the parameter of interest changed. This enables us to observe the impact of different configurations.
 The default configuration is:
+- Optimizer: SGD
 - Learning rate: 0.01
 - Model scale: M
 - Model pretraining: Pretrained
@@ -183,11 +186,11 @@ In a second experiment, we perform a Bayesian hyperparameter search of the learn
 In Figure 1 we show the general development in terms of mAP performance during training for each run. 
 These plots are shown for every experiment and should give the reader an intuition of the training.
 During the first 10-20 epochs of training the mAP performance almost always stays below 1e-5 or even drops to zero for multiple epochs.
-This can first be frightening, but appears to me normal for YOLOv5 and is dataset and configuration independent.
+This can be frightening at first, but appears to me normal for YOLOv5 and is dataset and configuration independent.
 After the first 10-20 epochs the performance of YOLOv5 then drastically increases.
 
 The final mAP scores are shown in Figure 2. We see that we achieve the highest mAP score of 0.57 with a learning rate of 0.001, closely followed by the learning rate of 0.0005.
-The learning rate of 0.01 performs the worse with a difference to the best mAP of about 0.09 mAP, which is quite significant.
+The learning rate of 0.01 performs worst with a difference to the best mAP of about 0.09 mAP, which is quite significant.
 We can conclude that it is quite beneficial to test out different learning rates as they have a significant impact on training.
 
 #### Figure 1: Learning rate - Runs
@@ -220,13 +223,13 @@ It can be concluded that choosing the best learning rate from a few guesses is s
 ### Scratch vs Pretrained
 
 YOLOv5 has a collection of pretrained models for every model scale that have been trained on the MS COCO dataset. 
-In this experiment we compare over different learning rates the impact of training from scratch vs using pretrained models.
+In this experiment we compare the impact of training from scratch vs using pretrained models over different learning rates.
 
 Figure 4 shows the general development in terms of mAP performance during training for each run. 
 In Figure 5 these runs have been grouped to scratch and pretrained. It can be seen that throughout the training pretrained models perform considerably better than models trained from scratch.
 Figure 6 further confirms this with the final mAP scores for each run.
 Here, the best pretrained run has the learning rate of 0.001 and a mAP of 0.56, while the best scratch run has a learning rate of  0.005 and a mAP of 0.45.
-This is a difference of 0.11 mAP and shows that it is highly benefitial to use pretrained models, even though the natural MS COCO dataset is very different to the non-natural Node21 dataset.
+This is a difference of 0.11 mAP and shows that it is highly beneficial to use pretrained models, even though the natural MS COCO dataset is very different to the non-natural Node21 dataset.
 
 #### Figure 4: Scratch vs Pretrained - runs
 <div align="center">
@@ -246,6 +249,7 @@ This is a difference of 0.11 mAP and shows that it is highly benefitial to use p
 ### Model Scale
 
 YOLOv5 has five different model scales: Nano (N), small (S), medium (M), large (L) and extra large (X). 
+The scaling is done via compound scaling as done in the [EfficientNets](https://arxiv.org/abs/1905.11946?context=stat.ML).
 
 Figure 7 shows the general development in terms of mAP performance during training for each run. 
 All models, except for the large model, have a high variance beginning at epoch 180 between the three repetitions done for every configuration.
@@ -268,9 +272,9 @@ The second-best model scale, which is the medium scale, achieves a mAP of 0.4667
 In this section we evaluate the impact of the batch size. In total, we evaluate the batch sizes 16, 32 and 64.
 
 Figure 9 shows the general development in terms of mAP performance during training for each run. 
-The final mAP results are shown in Figure 10. Here, we see that the impact of the batch size is marginal and the distance from the best to worse median mAP is only 0.019.
-Surprisingly, the best result is achieved with a batch size of 16. This is, however, most likely just the result of variance and the results would probably be equally good with more repetitions.
-We can conclude that larger batch sizes have no significant impact on better results and that a batch size of 16 is sufficient.
+The final mAP results are shown in Figure 10. Here, we see that the impact of the batch size is marginal and the distance from the best to the worst median mAP is only 0.019. From the three batch sizes evaluated batch size 16 performs best with the default learning rate of 0.01.
+We can conclude that larger batch sizes have no significant impact on better results and that a batch size of 16 performs the best.
+
 
 #### Figure 9: Batch size - runs
 <div align="center">
@@ -290,7 +294,7 @@ In this section we compare the original image size of 1024 against the default i
 Figure 11 shows the general development in terms of mAP performance during training for each run with the model scales N, S, M, L and X. 
 In Figure 12 these runs are grouped by image size. For every model scale we can see that the runs that are trained on images with size 1024 have much less variance than those trained with size 512.
 Further, we see that almost throughout the entire training runs with image size 1024 perform better than runs with image size 512.
-This is further confirmed in the final results depicted in Figure 12. Here, we see that the median mAP improvement over all scales of image size 1024 in comparison to 512 is 0.034, which is significant.
+This is further confirmed in the final results depicted in Figure 12. Here, we see that the median mAP improvement over all scales of image size 1024 in comparison to 512 is 0.034, which is considerable.
 
 
 #### Figure 11: Image size - runs
@@ -328,7 +332,7 @@ The models trained on images with natural intensity scale achieve a median mAP s
 while the models trained on images with non-natural intensity scale achieve a median mAP of 0.554. This is an improvement of 0.034.
 However, when comparing the best natural model with a mAP score of 0.5797 and the best non-natural model with a mAP score of 0.5793, than both models perform equally well.
 This is surprising as even though non-natural models generally perform better than natural ones over multiple learning rates, they do not achieve a better maximum mAP performance.
-It can be concluded that at least for the Node21 dataset, the non-natural intensity scale has no advantage over the natural intensity scale, when the learning rate has been properly tuned.
+It can be concluded that at least for the Node21 dataset, the non-natural intensity scale has a general advantage over the natural intensity scale, when compared over multiple learning rates. However, when comparing natural vs non-natural intensity scales with tuned learning rates then they perform equally well.
 
 #### Figure 14: Intensity scale - runs
 <div align="center">
@@ -367,7 +371,7 @@ In any way, standardization did not increase the mAP performance, which confirms
 
 ### Arch-P5 vs Arch-P6
 
-YOLOv5 provides two backend architecture P5 and P6. P5 was the used architecture until P6 was released in October 2021, which achieves considerably better results on the MS COCO benchmark than P5.
+YOLOv5 provides two backend architecture P5 and P6. P5 has been commonly used until P6 was released in October 2021, which achieves considerably better results on the MS COCO benchmark than P5.
 However, this is not necessarily true for every dataset and the reason for this experiment.
 We compared P5 against P6 based on every model scale to determine the best architecture to use for Node21.
 
@@ -442,14 +446,14 @@ mixup: 0.1  # image mixup (probability)
 copy_paste: 0.1  # segment copy-paste (probability)
 ```
 
-Evluation of the test set can be done with the following command:
+Evaluation of the test set can be done with the following command:
 
 `python val.py --data /path/to/data.yaml --weights /path/to/fold_0/best.pt /path/to/fold_1/best.pt /path/to/fold_2/best.pt /path/to/fold_3/best.pt /path/to/fold_4/best.pt --img 1024`
 
-All previous experiments have been conducted with a train and validations split. However, the final configuration was trained once with a normal train and validation split and once with five-fold cross-validation.
+All previous experiments have been conducted with a train and validations split. However, the final configuration was trained once with a normal train and validation split and once with five-fold cross-validation ensembling.
 The evaluation was conducted on a hold-out test set that consisted of 20% of the Node21 dataset.
-For the sake of it, we also trained five-fold cross-validations with the learning rates 0.01 and 0.0001 to compare them against the optimal learning rate of 0.001.
-The results are shown in Table 1. The optimal configuration trained with five-fold cross-validation has the highest score with a mAP of 0.594. This is an improvement of 0.044 in comparison to the mAP of 0.55 of the optimal configuration with a normal train/val training.
+We also trained five-fold cross-validations with the learning rates 0.01 and 0.0001 to compare them against the optimal learning rate of 0.001.
+The results are shown in Table 1. The optimal configuration trained with five-fold cross-validation has the highest score with a mAP of 0.594. This is an improvement of 0.044 achieved only with ensembling in comparison to the mAP of 0.55 of the optimal configuration with a normal train/val training.
 The other 5F-CV configurations with a learning rate of 0.01 and 0.0001 on achieve a mAP of 0.531 and 0.547, respectively. This is even lower than the train/val variant of the optimal configuration.
 
 #### Table 1: Final configuration - mAP results
