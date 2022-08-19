@@ -141,7 +141,7 @@ In order to optimize the performance of a model if desired, the augmentation par
 
 The following experiments have been performed on the Node21 dataset:
 - [Learning rate evaluation](#learning-rate) 
-  - [Learning rate hyperparameter search](#learning-rate---hyperparameter-search) 
+  - [Learning rate hyperparameter search](#learning-rate-hyperparameter-search) 
 - [Training from scratch vs training from pretrained YOLOv5 weights](#scratch-vs-pretrained) 
 - [Impact of different model scales](#model-scale) 
 - [Impact of different batch sizes](#batch-size) 
