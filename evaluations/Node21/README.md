@@ -1,4 +1,4 @@
-# Experiments on the Node21 dataset with YOLOv5
+# Experiments on the Node21 dataset with Generalized-YOLOv5
 
 This repository contains a modified YOLOv5 version that has been evaluated with multiple different settings on the Node21 dataset.
 Two main contributions have been made to YOLOv5. First, an extension to train on non-natural images and second a cross-validation extension.
